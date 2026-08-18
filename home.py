@@ -12,6 +12,7 @@ Exposes: HomePage(username)
 """
 
 import math
+import queue
 import threading
 import customtkinter as ctk
 import tkinter as tk
@@ -280,15 +281,28 @@ class HomePage(ctk.CTk):
         )
         self._trending_loading.pack(anchor="w")
 
+        self._trending_queue = queue.Queue()
         threading.Thread(target=self._fetch_trending, daemon=True).start()
+        self.after(500, self._poll_trending)
 
     def _fetch_trending(self):
         try:
             chart = billboard_charts.fetch_chart("hot-100")
             songs = [(e["Rank"], e["Song"], e["Artist"]) for e in chart[:10]]
-            self.after(0, self._populate_trending, songs)
+            self._trending_queue.put(("ok", songs))
         except Exception:
-            self.after(0, self._trending_error)
+            self._trending_queue.put(("err", None))
+
+    def _poll_trending(self):
+        try:
+            status, data = self._trending_queue.get_nowait()
+        except queue.Empty:
+            self.after(500, self._poll_trending)
+            return
+        if status == "ok":
+            self._populate_trending(data)
+        else:
+            self._trending_error()
 
     def _trending_error(self):
         if self._trending_loading.winfo_exists():
