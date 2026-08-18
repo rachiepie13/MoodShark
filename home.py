@@ -12,9 +12,11 @@ Exposes: HomePage(username)
 """
 
 import math
+import threading
 import customtkinter as ctk
 import tkinter as tk
 from PIL import Image
+import billboard_charts
 
 from recommendations import get_recommendations, CATEGORY_CONFIG
 
@@ -222,6 +224,7 @@ class HomePage(ctk.CTk):
         self.bind_all("<MouseWheel>", self._vertical_wheel)
 
         self._build_header()
+        self._build_trending_section()
         self._build_today_section()
         self._build_personality_sections()
 
@@ -259,6 +262,62 @@ class HomePage(ctk.CTk):
             ctk.CTkLabel(header, text=trait_text, font=("Consolas", 16, "bold"), text_color=BLUE).pack(anchor="w", pady=(4, 0))
 
         ctk.CTkFrame(header, height=2, fg_color="#2a2a2a").pack(fill="x", pady=(16, 0))
+
+    # ------------------------------------------------------------------
+    # "WEEKLY TRENDS" — Billboard Hot 100 top 10, loaded in background
+    # ------------------------------------------------------------------
+    def _build_trending_section(self):
+        self._trending_body = self._pixel_window(self.scroll, "WEEKLY TRENDS.EXE", border_color=GREEN, pady=(0, 30))
+        ctk.CTkLabel(self._trending_body, text="TOP 10 THIS WEEK", font=("Arial", 20, "bold"), text_color=GREEN).pack(anchor="w")
+        ctk.CTkLabel(self._trending_body, text="Source: Billboard Hot 100", font=("Consolas", 11), text_color=GRAY).pack(anchor="w", pady=(2, 0))
+
+        self._trending_container = ctk.CTkFrame(self._trending_body, fg_color="transparent")
+        self._trending_container.pack(fill="x", pady=(14, 0))
+
+        self._trending_loading = ctk.CTkLabel(
+            self._trending_container, text="Fetching this week's Billboard Hot 100...",
+            font=("Consolas", 11), text_color=GRAY
+        )
+        self._trending_loading.pack(anchor="w")
+
+        threading.Thread(target=self._fetch_trending, daemon=True).start()
+
+    def _fetch_trending(self):
+        try:
+            chart = billboard_charts.fetch_chart("hot-100")
+            songs = [(e["Rank"], e["Song"], e["Artist"]) for e in chart[:10]]
+            self.after(0, self._populate_trending, songs)
+        except Exception:
+            self.after(0, self._trending_error)
+
+    def _trending_error(self):
+        if self._trending_loading.winfo_exists():
+            self._trending_loading.configure(text="Couldn't load trending data. Try again later.", text_color=RED)
+
+    def _populate_trending(self, songs):
+        if self._trending_loading.winfo_exists():
+            self._trending_loading.destroy()
+
+        row = self._new_horizontal_row(self._trending_container, height=180)
+
+        for rank, title, artist in songs:
+            card = ctk.CTkFrame(row, width=200, height=160, fg_color=ROW_BG, corner_radius=8)
+            card.pack(side="left", padx=8, pady=10)
+            card.pack_propagate(False)
+
+            ctk.CTkLabel(
+                card, text=f"#{rank}", font=("Arial", 22, "bold"), text_color=YELLOW, anchor="w"
+            ).pack(anchor="w", padx=12, pady=(10, 0))
+
+            ctk.CTkLabel(
+                card, text=title, font=("Arial", 13, "bold"), text_color=WHITE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(4, 0))
+
+            ctk.CTkLabel(
+                card, text=artist, font=("Consolas", 10), text_color=BLUE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(2, 0))
 
     # ------------------------------------------------------------------
     # "BEST PICK FOR YOU TODAY" — mood-based, top 3, visually distinct
