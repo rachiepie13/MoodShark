@@ -190,8 +190,11 @@ PERSONALITY_DESCRIPTIONS = {
     },
 }
 
-# how close the top two traits need to be (percentage points) to show a "mix" result
-MIX_THRESHOLD = 10
+# How close the top two traits need to be (percentage points) to show a
+# "top two" result instead of a single trait. Kept low on purpose — a mix
+# result should be the exception (a genuine near-tie), not the default
+# outcome for most quiz-takers.
+MIX_THRESHOLD = 4
 
 
 def calculate_scores(answers):
