@@ -7,15 +7,15 @@ from quiz_data import QUESTIONS, PERSONALITY_DESCRIPTIONS, calculate_scores, get
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-BG = "#111111"
-CARD = "#1B1B1B"
+BG = "#B1C8EF"
+CARD = "#FFFFFF"
 YELLOW = "#E8FF2A"
-BLUE = "#2AC7FF"
+BLUE = "#B1C8EF"
 WHITE = "#FFFFFF"
 GRAY = "#A0A0A0"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
-ROW_BG = "#3A3D40"
+ROW_BG = "#B1C8EF"
 
 
 class QuizPage(ctk.CTk):
@@ -71,7 +71,7 @@ class QuizPage(ctk.CTk):
         for widget in self.card.winfo_children():
             widget.destroy()
 
-        stage = ctk.CTkFrame(self.card, width=680, height=240, fg_color="#151515", corner_radius=0)
+        stage = ctk.CTkFrame(self.card, width=680, height=240, fg_color="#308AEA", corner_radius=0)
         stage.pack(pady=(60, 25))
         stage.pack_propagate(False)
 
