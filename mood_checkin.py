@@ -57,15 +57,15 @@ MUTED = "#5A7096"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
 
-WINDOW_W = 880
-CARD_W = 760
-STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top + 60px bottom, matches quiz.py
+WINDOW_W = 1320
+CARD_W = 960
+STAGE_MARGIN = WINDOW_W - CARD_W  # 360 total = 180px top + 180px bottom, matches quiz.py
 # Intro/result screens use a fixed height (like quiz.py's shark screen) so
 # their content can sit nicely centered. Question/welcome-back/profile
 # screens measure their real content height instead of guessing.
 STAGE_CARD_H = 460
 CARD_MIN_H = 380
-CARD_MAX_H = 760
+CARD_MAX_H = 960
 
 MAX_RECENT_QUESTIONS = 7  # how many recently-used question ids we remember per user
 
@@ -410,7 +410,7 @@ class MoodCheckinPage(ctk.CTk):
     # ------------------------------------------------------------------
     # Small rounded panel helper, same visual language as quiz.py.
     # ------------------------------------------------------------------
-    def _panel(self, parent, title, accent=BLUE, fg_color=ROW_BG, pady=(0, 14), padx=32):
+    def _panel(self, parent, title, accent=BLUE, fg_color=ROW_BG, pady=(0, 14), padx=48):
         frame = ctk.CTkFrame(parent, fg_color=fg_color, corner_radius=16)
         frame.pack(fill="x", padx=padx, pady=pady)
 
@@ -519,13 +519,13 @@ class MoodCheckinPage(ctk.CTk):
         self._clear_card()
 
         header = ctk.CTkFrame(self.card, fg_color="transparent")
-        header.pack(fill="x", padx=32, pady=(28, 0))
+        header.pack(fill="x", padx=48, pady=(28, 0))
         ctk.CTkLabel(
             header, text=f"QUESTION {step_index + 1} / 2", font=("Arial", 12, "bold"), text_color=BLUE
         ).pack(anchor="w")
 
         progress_bg = ctk.CTkFrame(self.card, height=8, fg_color=ROW_BG, corner_radius=4)
-        progress_bg.pack(fill="x", padx=32, pady=(8, 22))
+        progress_bg.pack(fill="x", padx=48, pady=(8, 22))
         progress_bg.pack_propagate(False)
         fill_width = max(6, int(696 * (step_index / 2)))
         ctk.CTkFrame(progress_bg, width=fill_width, height=8, fg_color=YELLOW, corner_radius=4).place(x=0, y=0)
@@ -533,10 +533,10 @@ class MoodCheckinPage(ctk.CTk):
         ctk.CTkLabel(
             self.card, text=question["text"], font=("Arial", 20, "bold"),
             text_color=TEXT_DARK, wraplength=680, width=680, justify="center"
-        ).pack(padx=32, pady=(0, 18))
+        ).pack(padx=48, pady=(0, 18))
 
         options_container = ctk.CTkFrame(self.card, fg_color="transparent")
-        options_container.pack(fill="both", expand=True, padx=32)
+        options_container.pack(fill="both", expand=True, padx=48)
 
         for option in question["options"]:
             self._build_option_row(options_container, option, on_pick)
@@ -583,7 +583,7 @@ class MoodCheckinPage(ctk.CTk):
         self._clear_card()
 
         header = ctk.CTkFrame(self.card, fg_color="transparent")
-        header.pack(fill="x", padx=32, pady=(32, 0))
+        header.pack(fill="x", padx=48, pady=(32, 0))
         ctk.CTkLabel(
             header, text=f"Welcome back, {self.username}", font=("Arial", 22, "bold"), text_color=TEXT_DARK
         ).pack(anchor="w")
@@ -602,7 +602,7 @@ class MoodCheckinPage(ctk.CTk):
             ).pack(anchor="w", pady=(6, 0))
 
         btn_frame = ctk.CTkFrame(self.card, fg_color="transparent")
-        btn_frame.pack(padx=32, pady=(24, 0), fill="x")
+        btn_frame.pack(padx=48, pady=(24, 0), fill="x")
 
         ctk.CTkButton(
             btn_frame, text="VIEW MY PROFILE", height=44, corner_radius=12,
@@ -711,7 +711,7 @@ class MoodCheckinPage(ctk.CTk):
         desc = PERSONALITY_DESCRIPTIONS.get(top_trait, {})
 
         header = ctk.CTkFrame(self.card, fg_color="transparent")
-        header.pack(fill="x", padx=32, pady=(32, 0))
+        header.pack(fill="x", padx=48, pady=(32, 0))
         ctk.CTkLabel(header, text="YOUR PERSONALITY", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
         ctk.CTkLabel(
             header, text=f"You are a {top_trait}", font=("Arial", 24, "bold"), text_color=TEXT_DARK
@@ -732,7 +732,7 @@ class MoodCheckinPage(ctk.CTk):
             self.card, text="BACK", width=200, height=40, corner_radius=12,
             fg_color=ROW_BG, hover_color="#C3E0FB", text_color=TEXT_DARK, font=("Arial", 13, "bold"),
             command=lambda: self.show_welcome_back(self.user_doc.get("daily_mood", {}))
-        ).pack(padx=32, pady=(24, 0), anchor="w")
+        ).pack(padx=48, pady=(24, 0), anchor="w")
 
         self._fit_card(bottom_pad=30)
 

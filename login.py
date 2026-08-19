@@ -13,7 +13,7 @@ YELLOW = "#E8FF2A"
 BLUE = "#2AC7FF"
 LIGHT_BLUE = "#D6ECFF"
 FIELD_TEXT = "#0B1220"
-MUTED = "#8FA3C7"
+MUTED = "#5A7096"
 WHITE = "#FFFFFF"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
@@ -23,11 +23,11 @@ class LoginPage(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("MoodShark")
-        self.geometry("1000x680")
+        self.geometry("1320x880")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
-        card = ctk.CTkFrame(self, width=480, height=580, corner_radius=24, fg_color=CARD)
+        card = ctk.CTkFrame(self, width=520, height=620, corner_radius=24, fg_color=CARD)
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.pack_propagate(False)
 
@@ -36,7 +36,7 @@ class LoginPage(ctk.CTk):
             dark_image=Image.open("assets/logo.png"),
             size=(280, 112)
         )
-        ctk.CTkLabel(card, image=self.logo_image, text="").pack(pady=(40, 8))
+        ctk.CTkLabel(card, image=self.logo_image, text="").pack(pady=(60, 12))
 
         self.eye_open = ctk.CTkImage(
             light_image=Image.open("assets/eye.png"),
@@ -49,16 +49,16 @@ class LoginPage(ctk.CTk):
             size=(20, 20)
         )
 
-        ctk.CTkLabel(card, text="Find your niche", font=("Arial", 15), text_color=MUTED).pack(pady=(0, 30))
+        ctk.CTkLabel(card, text="Find your niche", font=("Arial", 15), text_color=MUTED).pack(pady=(0, 40))
 
         self.username = ctk.CTkEntry(
-            card, width=340, height=44, placeholder_text="Username",
+            card, width=380, height=44, placeholder_text="Username",
             fg_color=LIGHT_BLUE, text_color=FIELD_TEXT, placeholder_text_color="#5A7096",
             border_width=0, corner_radius=10
         )
         self.username.pack(pady=8)
 
-        password_frame = ctk.CTkFrame(card, width=340, height=44, fg_color=LIGHT_BLUE, corner_radius=10)
+        password_frame = ctk.CTkFrame(card, width=380, height=44, fg_color=LIGHT_BLUE, corner_radius=10)
         password_frame.pack(pady=8)
         password_frame.pack_propagate(False)
 
@@ -80,11 +80,11 @@ class LoginPage(ctk.CTk):
         )
         self.eye_button.pack(side="right", padx=(0, 10))
 
-        self.status_label = ctk.CTkLabel(card, text="", font=("Arial", 12), text_color=RED, wraplength=340)
+        self.status_label = ctk.CTkLabel(card, text="", font=("Arial", 12), text_color=RED, wraplength=380)
         self.status_label.pack(pady=(10, 0))
 
         ctk.CTkButton(
-            card, text="LOGIN", width=340, height=44, fg_color=YELLOW,
+            card, text="LOGIN", width=380, height=44, fg_color=YELLOW,
             hover_color="#D6EB00", text_color="black", font=("Arial", 14, "bold"),
             command=self.handle_login
         ).pack(pady=(18, 16))

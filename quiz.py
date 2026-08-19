@@ -44,14 +44,14 @@ GREEN = "#6BFF8F"
 # two match cards side by side plus a 10-row breakdown — the old shared
 # 760px width made that section feel cramped and forced it to scroll
 # more than it needed to.
-WINDOW_W = 880
-CARD_W = 760
-STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top/bottom, 60px sides
+WINDOW_W = 1320
+CARD_W = 960
+STAGE_MARGIN = WINDOW_W - CARD_W  # 360 total = 180px top/bottom, 180px sides
 SHARK_CARD_H = 440
 
 RESULT_CARD_W = CARD_W
-RESULT_CARD_MAX = 880
-RESULT_CARD_MIN = 880
+RESULT_CARD_MAX = 960
+RESULT_CARD_MIN = 960
 
 
 class QuizPage(ctk.CTk):
@@ -191,7 +191,7 @@ class QuizPage(ctk.CTk):
             widget.destroy()
 
         header = ctk.CTkFrame(self.card, fg_color="transparent")
-        header.pack(fill="x", padx=32, pady=(28, 0))
+        header.pack(fill="x", padx=48, pady=(28, 0))
 
         ctk.CTkLabel(
             header, text=f"QUESTION {q_index + 1} / {len(QUESTIONS)}",
@@ -199,19 +199,19 @@ class QuizPage(ctk.CTk):
         ).pack(anchor="w")
 
         progress_bg = ctk.CTkFrame(self.card, height=8, fg_color=ROW_BG, corner_radius=4)
-        progress_bg.pack(fill="x", padx=32, pady=(8, 22))
+        progress_bg.pack(fill="x", padx=48, pady=(8, 22))
         progress_bg.pack_propagate(False)
         fill_frac = q_index / len(QUESTIONS)
-        fill_width = max(6, int(696 * fill_frac))
+        fill_width = max(6, int(864 * fill_frac))
         ctk.CTkFrame(progress_bg, width=fill_width, height=8, fg_color=YELLOW, corner_radius=4).place(x=0, y=0)
 
         ctk.CTkLabel(
             self.card, text=q_data["question"], font=("Arial", 21, "bold"),
-            text_color=TEXT_DARK, wraplength=680, width=680, justify="center"
-        ).pack(padx=32, pady=(0, 18))
+            text_color=TEXT_DARK, wraplength=880, width=880, justify="center"
+        ).pack(padx=48, pady=(0, 18))
 
         options_container = ctk.CTkFrame(self.card, fg_color="transparent")
-        options_container.pack(fill="both", expand=True, padx=32)
+        options_container.pack(fill="both", expand=True, padx=48)
 
         last_row = None
         for letter, text, scores in q_data["options"]:
@@ -287,7 +287,7 @@ class QuizPage(ctk.CTk):
                 widget.destroy()
             ctk.CTkLabel(
                 self.card, text=f"Something broke building your result:\n{e}",
-                font=("Arial", 12), text_color=RED, wraplength=680, width=680, justify="center"
+                font=("Arial", 12), text_color=RED, wraplength=880, width=880, justify="center"
             ).pack(pady=200)
 
     def _build_result_screen(self):
@@ -302,13 +302,13 @@ class QuizPage(ctk.CTk):
 
         # ── layered nesting: blue outer → white inner ──
         outer_frame = ctk.CTkFrame(self.card, fg_color=BG, corner_radius=20)
-        outer_frame.pack(fill="both", expand=True, padx=30, pady=30)
+        outer_frame.pack(fill="both", expand=True, padx=40, pady=40)
 
         inner_panel = ctk.CTkFrame(outer_frame, fg_color=CARD, corner_radius=16)
         inner_panel.pack(fill="both", expand=True, padx=12, pady=12)
 
         scroll = ctk.CTkScrollableFrame(inner_panel, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=24, pady=(20, 16))
+        scroll.pack(fill="both", expand=True, padx=32, pady=(20, 16))
         content = scroll
 
         ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
@@ -318,12 +318,12 @@ class QuizPage(ctk.CTk):
             second_pct = summary["percentages"][second_trait]
             ctk.CTkLabel(
                 content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
+                text_color=TEXT_DARK, wraplength=880, width=880, justify="left"
             ).pack(anchor="w", pady=(2, 4))
             ctk.CTkLabel(
                 content,
                 text="These are the two personality types that best match your answers.",
-                font=("Arial", 13), text_color=MUTED, wraplength=780, width=780, justify="left"
+                font=("Arial", 13), text_color=MUTED, wraplength=880, width=880, justify="left"
             ).pack(anchor="w", pady=(0, 18))
 
             cards_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -334,7 +334,7 @@ class QuizPage(ctk.CTk):
         else:
             ctk.CTkLabel(
                 content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
+                text_color=TEXT_DARK, wraplength=880, width=880, justify="left"
             ).pack(anchor="w", pady=(2, 18))
 
             self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
@@ -395,7 +395,7 @@ class QuizPage(ctk.CTk):
         # These widths are bigger now to match the wider result card:
         # two side-by-side cards on a 940px stage get ~360px each of
         # usable text width instead of the old ~290px on a 760px stage.
-        desc_w = 360 if not full_width else 820
+        desc_w = 400 if not full_width else 760
         ctk.CTkLabel(
             inner, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
             wraplength=desc_w, width=desc_w, justify="left"
@@ -415,7 +415,7 @@ class QuizPage(ctk.CTk):
         bar_bg = ctk.CTkFrame(row, height=10, fg_color="#FFFFFF", corner_radius=5)
         bar_bg.pack(side="left", fill="x", expand=True, padx=8)
         bar_bg.pack_propagate(False)
-        bar_width = max(4, int(560 * (pct / 100)))
+        bar_width = max(4, int(720 * (pct / 100)))
         ctk.CTkFrame(bar_bg, width=bar_width, height=10, fg_color=BLUE, corner_radius=5).place(x=0, y=0)
 
         ctk.CTkLabel(row, text=f"{pct}%", font=("Arial", 11, "bold"), text_color=MUTED, width=44).pack(side="left")

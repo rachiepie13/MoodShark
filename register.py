@@ -21,18 +21,18 @@ class RegisterPage(ctk.CTk):
     def __init__(self):
         super().__init__()
         self.title("MoodShark - Register")
-        self.geometry("1150x680")
+        self.geometry("1320x880")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
-        left_frame = ctk.CTkFrame(self, width=500, height=680, fg_color=BG, corner_radius=0)
+        left_frame = ctk.CTkFrame(self, width=560, height=880, fg_color=BG, corner_radius=0)
         left_frame.place(x=0, y=0)
         left_frame.pack_propagate(False)
 
-        right_frame = ctk.CTkFrame(self, width=650, height=680, fg_color=BG, corner_radius=0)
-        right_frame.place(x=500, y=0)
+        right_frame = ctk.CTkFrame(self, width=760, height=880, fg_color=BG, corner_radius=0)
+        right_frame.place(x=560, y=0)
 
-        card = ctk.CTkFrame(left_frame, width=380, height=620, corner_radius=20, fg_color=CARD)
+        card = ctk.CTkFrame(left_frame, width=440, height=720, corner_radius=24, fg_color=CARD)
         card.place(relx=0.5, rely=0.5, anchor="center")
         card.pack_propagate(False)
 
@@ -50,23 +50,23 @@ class RegisterPage(ctk.CTk):
         ctk.CTkLabel(card, text="Create an ID", font=("Arial", 26, "bold"), text_color=WHITE).pack(pady=(30, 5))
         ctk.CTkLabel(card, text="Join MoodShark and find your vibe.", font=("Arial", 13), text_color="#000000").pack(pady=(0, 20))
 
-        self.name_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Full Name", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
+        self.name_entry = ctk.CTkEntry(card, width=360, height=38, placeholder_text="Full Name", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.name_entry.pack(pady=6)
 
-        self.username_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Username", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
+        self.username_entry = ctk.CTkEntry(card, width=360, height=38, placeholder_text="Username", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.username_entry.pack(pady=6)
 
-        self.email_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Email", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
+        self.email_entry = ctk.CTkEntry(card, width=360, height=38, placeholder_text="Email", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.email_entry.pack(pady=6)
 
         self.password_entry, self.password_eye_btn = self._build_password_field(card, "Password")
         self.confirm_entry, self.confirm_eye_btn = self._build_password_field(card, "Confirm Password")
 
-        self.status_label = ctk.CTkLabel(card, text="", font=("Arial", 12), text_color=RED, wraplength=300)
+        self.status_label = ctk.CTkLabel(card, text="", font=("Arial", 12), text_color=RED, wraplength=360)
         self.status_label.pack(pady=(10, 0))
 
         ctk.CTkButton(
-            card, text="CREATE ACCOUNT", width=300, height=40,
+            card, text="CREATE ACCOUNT", width=360, height=40,
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
             command=self.handle_register
         ).pack(pady=(15, 15))
@@ -82,12 +82,12 @@ class RegisterPage(ctk.CTk):
         self._animate_scene()
 
     def _build_password_field(self, parent, placeholder):
-        frame = ctk.CTkFrame(parent, width=300, height=38, fg_color=LIGHT_BLUE, corner_radius=8)
+        frame = ctk.CTkFrame(parent, width=360, height=38, fg_color=LIGHT_BLUE, corner_radius=8)
         frame.pack(pady=6)
         frame.pack_propagate(False)
 
         entry = ctk.CTkEntry(
-            frame, width=250, height=30, placeholder_text=placeholder,
+            frame, width=310, height=30, placeholder_text=placeholder,
             show="*", fg_color="transparent", border_width=0, text_color="#000000"
         )
         entry.pack(side="left", padx=(12, 0), pady=4)
@@ -119,7 +119,7 @@ class RegisterPage(ctk.CTk):
     # ------------------------------------------------------------------
 
     ENTRANCE_FRAMES = 45   # ~1.8s at 40ms/frame
-    HIDDEN_Y = 650         # below the visible 680px-tall window -> invisible at start
+    HIDDEN_Y = 850         # below the visible 880px-tall window -> invisible at start
 
     @staticmethod
     def _load_rotated_icon(path, size, angle):
@@ -133,9 +133,9 @@ class RegisterPage(ctk.CTk):
         return ctk.CTkImage(light_image=rotated, dark_image=rotated, size=rotated.size)
 
     def _build_decorations(self, parent):
-        panel_w = 650
+        panel_w = 760
         self.panel_w = panel_w
-        self.wave_y = 460
+        self.wave_y = 600
 
         self.waves_img = ctk.CTkImage(
             light_image=Image.open("assets/waves.png"),
@@ -155,7 +155,7 @@ class RegisterPage(ctk.CTk):
             dark_image=Image.open("assets/shark.png"),
             size=(320, 305)
         )
-        self.shark_base_y = 280
+        self.shark_base_y = 365
         self.shark_label = ctk.CTkLabel(parent, image=self.shark_img, text="")
         self.shark_label.place(relx=0.5, y=self.HIDDEN_Y, anchor="n")
 
@@ -163,17 +163,17 @@ class RegisterPage(ctk.CTk):
         # the shark's body (not scattered up near the top corners) so the
         # whole group reads as one bunch rather than three separate props
         self.mike_img = self._load_rotated_icon("assets/mike.png", (112, 112), 14)
-        self.mike_base = (160, 120)
+        self.mike_base = (185, 155)
         self.mike_label = ctk.CTkLabel(parent, image=self.mike_img, text="", fg_color="transparent")
         self.mike_label.place(x=self.mike_base[0], y=self.HIDDEN_Y)
 
         self.movies_img = self._load_rotated_icon("assets/movies.png", (140, 140), -12)
-        self.movies_base = (455, 50)
+        self.movies_base = (530, 65)
         self.movies_label = ctk.CTkLabel(parent, image=self.movies_img, text="", fg_color="transparent")
         self.movies_label.place(x=self.movies_base[0], y=self.HIDDEN_Y)
 
         self.note_img = self._load_rotated_icon("assets/note.png", (120, 120), 10)
-        self.note_base = (480, 215)
+        self.note_base = (560, 280)
         self.note_label = ctk.CTkLabel(parent, image=self.note_img, text="", fg_color="transparent")
         self.note_label.place(x=self.note_base[0], y=self.HIDDEN_Y)
 
