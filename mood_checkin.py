@@ -583,9 +583,9 @@ class MoodCheckinPage(ctk.CTk):
         self._clear_card()
 
         header = ctk.CTkFrame(self.card, fg_color="transparent")
-        header.pack(fill="x", padx=32, pady=(32, 0))
+        header.pack(fill="x", padx=32, pady=(18, 0))
         ctk.CTkLabel(
-            header, text=f"Welcome back, {self.username}", font=("Arial", 22, "bold"), text_color=TEXT_DARK
+            header, text=f"Welcome back, {self.username}", font=("Arial", 22, "bold"), text_color=TEXT_DARK, justify="left", wraplength=660, width=660
         ).pack(anchor="w")
 
         mood_text = existing_mood.get("mood", "unknown")
@@ -598,8 +598,8 @@ class MoodCheckinPage(ctk.CTk):
         if secondary:
             ctk.CTkLabel(
                 panel, text=f"with a little {secondary.lower()} mixed in",
-                font=("Arial", 12), text_color=MUTED
-            ).pack(anchor="w", pady=(6, 0))
+                font=("Arial", 12), text_color=MUTED, justify="left", wraplength=660, width=660
+            ).pack(anchor="w", pady=(18, 0))
 
         btn_frame = ctk.CTkFrame(self.card, fg_color="transparent")
         btn_frame.pack(padx=32, pady=(24, 0), fill="x")
