@@ -11,10 +11,17 @@ recommendations.py — this file never talks to score_* functions directly.
 Exposes: HomePage(username)
 """
 
+import math
+import queue
+import re
+import threading
 import customtkinter as ctk
 import tkinter as tk
 import math
 from PIL import Image
+import billboard_charts
+import requests
+from bs4 import BeautifulSoup
 
 from recommendations import get_recommendations, CATEGORY_CONFIG
 
@@ -220,6 +227,7 @@ class HomePage(ctk.CTk):
         self.bind_all("<MouseWheel>", self._vertical_wheel)
 
         self._build_header()
+        self._build_trending_section()
         self._build_today_section()
         self._build_personality_sections()
 
@@ -260,6 +268,113 @@ class HomePage(ctk.CTk):
             ctk.CTkLabel(header, text=trait_text, font=("Arial", 16, "bold"), text_color=BLUE).pack(anchor="w", pady=(6, 0))
 
         ctk.CTkFrame(header, height=2, fg_color=ROW_BG).pack(fill="x", pady=(18, 0))
+
+    # ------------------------------------------------------------------
+    # "WEEKLY TRENDS" — Billboard Hot 100 + Apple Podcasts top charts,
+    # both loaded in a background thread.
+    # ------------------------------------------------------------------
+    def _build_trending_section(self):
+        self._trending_body = self._pixel_window(self.scroll, "WEEKLY TRENDS.EXE", border_color=GREEN, pady=(0, 30))
+        ctk.CTkLabel(self._trending_body, text="TRENDING THIS WEEK", font=("Arial", 20, "bold"), text_color=GREEN).pack(anchor="w")
+
+        # --- music sub-section ---
+        ctk.CTkLabel(self._trending_body, text="BILLBOARD HOT 100", font=("Consolas", 12, "bold"), text_color=BLUE).pack(anchor="w", pady=(14, 0))
+        self._music_container = ctk.CTkFrame(self._trending_body, fg_color="transparent")
+        self._music_container.pack(fill="x", pady=(6, 0))
+        self._music_loading = ctk.CTkLabel(
+            self._music_container, text="Fetching this week's Billboard Hot 100...",
+            font=("Consolas", 11), text_color=GRAY
+        )
+        self._music_loading.pack(anchor="w")
+
+        # --- podcast sub-section ---
+        ctk.CTkLabel(self._trending_body, text="TOP PODCASTS", font=("Consolas", 12, "bold"), text_color=BLUE).pack(anchor="w", pady=(18, 0))
+        self._podcast_container = ctk.CTkFrame(self._trending_body, fg_color="transparent")
+        self._podcast_container.pack(fill="x", pady=(6, 0))
+        self._podcast_loading = ctk.CTkLabel(
+            self._podcast_container, text="Fetching top podcasts from Apple Podcasts...",
+            font=("Consolas", 11), text_color=GRAY
+        )
+        self._podcast_loading.pack(anchor="w")
+
+        self._music_queue = queue.Queue()
+        self._podcast_queue = queue.Queue()
+        threading.Thread(target=self._fetch_trending, daemon=True).start()
+        self.after(500, self._poll_music)
+        self.after(500, self._poll_podcast)
+
+    def _fetch_trending(self):
+        # Billboard Hot 100
+        try:
+            chart = billboard_charts.fetch_chart("hot-100")
+            songs = [(e["Rank"], e["Song"], e["Artist"]) for e in chart[:10]]
+            self._music_queue.put(("ok", songs))
+        except Exception:
+            self._music_queue.put(("err", None))
+
+        # Apple Podcasts top charts
+        try:
+            headers = {
+                "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                              "AppleWebKit/537.36 (KHTML, like Gecko) "
+                              "Chrome/131.0.0.0 Safari/537.36",
+            }
+            resp = requests.get("https://podcasts.apple.com/us/charts", headers=headers, timeout=15)
+            resp.raise_for_status()
+            soup = BeautifulSoup(resp.text, "html.parser")
+            lines = soup.get_text(separator="\n", strip=True).split("\n")
+            podcasts = []
+            for i, line in enumerate(lines):
+                if line.strip() == "Top Shows":
+                    j = i + 1
+                    while j + 3 < len(lines) and lines[j].strip() != "Top Subscriber Shows":
+                        name = lines[j].strip()
+                        rank = lines[j + 1].strip()
+                        publisher = lines[j + 3].strip()
+                        if rank.isdigit():
+                            podcasts.append((int(rank), name, publisher))
+                        j += 4
+                    break
+            self._podcast_queue.put(("ok", podcasts[:10]))
+        except Exception:
+            self._podcast_queue.put(("err", None))
+
+    def _poll_music(self):
+        try:
+            status, data = self._music_queue.get_nowait()
+        except queue.Empty:
+            self.after(500, self._poll_music)
+            return
+        if status == "ok":
+            self._populate_music(data)
+        else:
+            if self._music_loading.winfo_exists():
+                self._music_loading.configure(text="Couldn't load Billboard data.", text_color=RED)
+
+    def _populate_music(self, songs):
+        if self._music_loading.winfo_exists():
+            self._music_loading.destroy()
+
+        row = self._new_horizontal_row(self._music_container, height=180)
+
+        for rank, title, artist in songs:
+            card = ctk.CTkFrame(row, width=200, height=160, fg_color=ROW_BG, corner_radius=8)
+            card.pack(side="left", padx=8, pady=10)
+            card.pack_propagate(False)
+
+            ctk.CTkLabel(
+                card, text=f"#{rank}", font=("Arial", 22, "bold"), text_color=YELLOW, anchor="w"
+            ).pack(anchor="w", padx=12, pady=(10, 0))
+
+            ctk.CTkLabel(
+                card, text=title, font=("Arial", 13, "bold"), text_color=WHITE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(4, 0))
+
+            ctk.CTkLabel(
+                card, text=artist, font=("Consolas", 10), text_color=BLUE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(2, 0))
 
     # ------------------------------------------------------------------
     # "BEST PICK FOR YOU TODAY" — mood-based, top 3, visually distinct
@@ -405,6 +520,80 @@ class HomePage(ctk.CTk):
                 return True
             w = getattr(w, "master", None)
         return False
+
+    def _animate_card(self, card, target_w, target_h, target_padx, target_pady, steps=8, step_ms=12):
+        start_w, start_h = card._cur_w, card._cur_h
+        start_padx, start_pady = card._cur_padx, card._cur_pady
+
+        def step(i=0):
+            t = i / steps
+            eased = 1 - (1 - t) ** 2
+            w = int(start_w + (target_w - start_w) * eased)
+            h = int(start_h + (target_h - start_h) * eased)
+            px = int(start_padx + (target_padx - start_padx) * eased)
+            py = int(start_pady + (target_pady - start_pady) * eased)
+
+            card.configure(width=w, height=h)
+            card.pack_configure(padx=px, pady=py)
+            card._cur_w, card._cur_h = w, h
+            card._cur_padx, card._cur_pady = px, py
+
+            if i < steps:
+                card._anim_job = self.after(step_ms, lambda: step(i + 1))
+            else:
+                card._anim_job = None
+
+        step()
+
+    def _dim_siblings(self, card, dim):
+        for sibling in getattr(card._row, "_cards", []):
+            if sibling is card:
+                continue
+            sibling.configure(fg_color=DIM_BG if dim else ROW_BG)
+
+    # ------------------------------------------------------------------
+    # Podcast trending (polled from queue like music)
+    # ------------------------------------------------------------------
+    def _poll_podcast(self):
+        try:
+            status, data = self._podcast_queue.get_nowait()
+        except queue.Empty:
+            self.after(500, self._poll_podcast)
+            return
+        if status == "ok":
+            self._populate_podcast(data)
+        else:
+            if self._podcast_loading.winfo_exists():
+                self._podcast_loading.configure(text="Couldn't load podcast data.", text_color=RED)
+
+    def _populate_podcast(self, podcasts):
+        if self._podcast_loading.winfo_exists():
+            self._podcast_loading.destroy()
+
+        if not podcasts:
+            ctk.CTkLabel(self._podcast_container, text="No podcast data available.", font=("Consolas", 11), text_color=GRAY).pack(anchor="w")
+            return
+
+        row = self._new_horizontal_row(self._podcast_container, height=180)
+
+        for rank, name, publisher in podcasts:
+            card = ctk.CTkFrame(row, width=200, height=160, fg_color=ROW_BG, corner_radius=8)
+            card.pack(side="left", padx=8, pady=10)
+            card.pack_propagate(False)
+
+            ctk.CTkLabel(
+                card, text=f"#{rank}", font=("Arial", 22, "bold"), text_color=YELLOW, anchor="w"
+            ).pack(anchor="w", padx=12, pady=(10, 0))
+
+            ctk.CTkLabel(
+                card, text=name, font=("Arial", 13, "bold"), text_color=WHITE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(4, 0))
+
+            ctk.CTkLabel(
+                card, text=publisher, font=("Consolas", 10), text_color=BLUE,
+                wraplength=170, justify="left", anchor="w"
+            ).pack(anchor="w", padx=12, pady=(2, 0))
 
 
 if __name__ == "__main__":
