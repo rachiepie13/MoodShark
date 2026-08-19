@@ -1,3 +1,21 @@
+# DPI-awareness fix: this MUST run before the first Tk/CTk window is
+# created in the process. When quiz.py is launched on its own (instead of
+# via login.py), QuizPage is the first window created — if the process
+# hasn't been marked DPI-aware yet at that point, Windows can render the
+# whole interface at a smaller, unscaled size. Doing this here, before the
+# customtkinter import even fires its own internal DPI calls, makes the
+# window render at a consistent size no matter which script starts it.
+import sys
+if sys.platform == "win32":
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import math
 import customtkinter as ctk
 from PIL import Image
@@ -7,14 +25,33 @@ from quiz_data import QUESTIONS, PERSONALITY_DESCRIPTIONS, calculate_scores, get
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-BG = "#111111"
-CARD = "#1B1B1B"
+# Same palette as login.py / register.py — sky blue background, white
+# cards, yellow for the main actions, sky blue for secondary accents.
+BG = "#B1C8EF"
+CARD = "#FFFFFF"
+ROW_BG = "#D6ECFF"
+ROW_HOVER = "#2AC7FF"
 YELLOW = "#E8FF2A"
-SKY_BLUE = "#2AC7FF"
-WHITE = "#FFFFFF"
-GRAY = "#A0A0A0"
-RED = "#FF5C5C"       # only ever used for the rare "couldn't save" warning
-ROW_BG = "#242424"
+BLUE = "#2AC7FF"
+TEXT_DARK = "#0B1220"
+MUTED = "#5A7096"
+RED = "#FF5C5C"
+GREEN = "#6BFF8F"
+
+# Every screen sizes itself to what it actually needs. Question/shark
+# screens use the compact width below; the result screen gets its own,
+# wider size (see RESULT_CARD_W / RESULT_CARD_MAX) since it has to fit
+# two match cards side by side plus a 10-row breakdown — the old shared
+# 760px width made that section feel cramped and forced it to scroll
+# more than it needed to.
+WINDOW_W = 880
+CARD_W = 760
+STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top/bottom, 60px sides
+SHARK_CARD_H = 440
+
+RESULT_CARD_W = CARD_W
+RESULT_CARD_MAX = 900
+RESULT_CARD_MIN = 700
 
 
 class QuizPage(ctk.CTk):
@@ -22,9 +59,7 @@ class QuizPage(ctk.CTk):
         super().__init__()
         self.username = username
         self.title("MoodShark - Personality Quiz")
-        # Bigger stage overall so the result screen has room to breathe
-        # without needing to scroll.
-        self.geometry("1150x960")
+        self.geometry(f"{WINDOW_W}x{SHARK_CARD_H + STAGE_MARGIN}")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
@@ -32,7 +67,7 @@ class QuizPage(ctk.CTk):
         self.answers = []
         self._shark_animation_running = False
 
-        self.card = ctk.CTkFrame(self, width=980, height=880, corner_radius=20, fg_color=CARD)
+        self.card = ctk.CTkFrame(self, width=CARD_W, height=SHARK_CARD_H, corner_radius=24, fg_color=CARD)
         self.card.place(relx=0.5, rely=0.5, anchor="center")
         self.card.pack_propagate(False)
 
@@ -43,59 +78,72 @@ class QuizPage(ctk.CTk):
         )
 
     # ------------------------------------------------------------------
-    # Small retro "pixel window" helper — a bordered box with a colored
-    # titlebar, reused across the result screen to match the login/register
-    # screens' aesthetic instead of showing raw text.
+    # Resizes both the window and the card together. card_w defaults to
+    # the standard compact width; the result screen passes RESULT_CARD_W
+    # to get its own wider stage.
     # ------------------------------------------------------------------
-    def _pixel_window(self, parent, title, border_color=YELLOW, pady=(0, 18)):
-        frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=0, border_width=2, border_color=border_color)
+    def _resize_stage(self, card_h, card_w=CARD_W):
+        window_w = card_w + STAGE_MARGIN
+        window_h = card_h + STAGE_MARGIN
+        max_window_h = self.winfo_screenheight() - 100  # leave room for menu bar + dock
+        window_h = min(window_h, max_window_h)
+        card_h = window_h - STAGE_MARGIN
+        self.geometry(f"{window_w}x{window_h}")
+        self.card.configure(width=card_w, height=card_h)
+
+    # ------------------------------------------------------------------
+    # Small rounded panel helper, used anywhere we need a soft light-blue
+    # block with an optional title above it (the breakdown section uses
+    # this too).
+    # ------------------------------------------------------------------
+    def _panel(self, parent, title, accent=BLUE, fg_color=ROW_BG, pady=(0, 14)):
+        frame = ctk.CTkFrame(parent, fg_color=fg_color, corner_radius=16)
         frame.pack(fill="x", pady=pady)
 
-        titlebar = ctk.CTkFrame(frame, height=30, fg_color=border_color, corner_radius=0)
-        titlebar.pack(side="top", fill="x")
-        titlebar.pack_propagate(False)
-        ctk.CTkLabel(titlebar, text=title, font=("Consolas", 12, "bold"), text_color="#111111").pack(side="left", padx=12)
-        dots = ctk.CTkFrame(titlebar, fg_color=border_color)
-        dots.pack(side="right", padx=10)
-        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111").pack(side="left", padx=2)
-        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111").pack(side="left", padx=2)
+        body = ctk.CTkFrame(frame, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=20, pady=16)
 
-        body = ctk.CTkFrame(frame, fg_color=CARD, corner_radius=0)
-        body.pack(side="top", fill="both", expand=True, padx=20, pady=20)
+        if title:
+            ctk.CTkLabel(
+                body, text=title, font=("Arial", 11, "bold"),
+                text_color=accent
+            ).pack(anchor="w", pady=(0, 6))
         return body
 
     # ------------------------------------------------------------------
-    # Shark fin circling screen
+    # Shark fin circling screen.
     # ------------------------------------------------------------------
     def show_shark_screen(self, message, button_text, on_continue):
+        self._resize_stage(SHARK_CARD_H)
         self._shark_animation_running = False
         for widget in self.card.winfo_children():
             widget.destroy()
 
-        stage = ctk.CTkFrame(self.card, width=900, height=280, fg_color="#151515", corner_radius=0)
-        stage.pack(pady=(70, 30))
+        centered = ctk.CTkFrame(self.card, fg_color="transparent")
+        centered.pack(expand=True)
+
+        stage = ctk.CTkFrame(centered, width=640, height=200, fg_color=ROW_BG, corner_radius=18)
+        stage.pack(pady=(0, 26))
         stage.pack_propagate(False)
 
         try:
             shark_img = ctk.CTkImage(
                 light_image=Image.open("assets/shark_fin.png"),
                 dark_image=Image.open("assets/shark_fin.png"),
-                size=(44, 44)
+                size=(40, 40)
             )
             shark_label = ctk.CTkLabel(stage, image=shark_img, text="")
             shark_label.image = shark_img
         except Exception:
-            # No emoji fallback — a simple filled circle keeps the retro,
-            # icon-free look even if the fin asset is missing.
             shark_label = ctk.CTkLabel(
-                stage, text="", width=30, height=30,
-                fg_color=SKY_BLUE, corner_radius=15
+                stage, text="", width=28, height=28,
+                fg_color=BLUE, corner_radius=14
             )
 
-        shark_label.place(x=428, y=118)
+        shark_label.place(x=300, y=80)
 
-        center_x, center_y = 450, 140
-        radius = 90
+        center_x, center_y = 320, 100
+        radius = 70
         angle = {"value": 0}
         self._shark_animation_running = True
 
@@ -104,8 +152,8 @@ class QuizPage(ctk.CTk):
                 return
             angle["value"] += 6
             rad = math.radians(angle["value"])
-            x_pos = center_x + radius * math.cos(rad) - 22
-            y_pos = center_y + radius * math.sin(rad) - 22
+            x_pos = center_x + radius * math.cos(rad) - 20
+            y_pos = center_y + radius * math.sin(rad) - 20
             try:
                 shark_label.place(x=x_pos, y=y_pos)
             except Exception:
@@ -115,63 +163,77 @@ class QuizPage(ctk.CTk):
         animate()
 
         ctk.CTkLabel(
-            self.card, text=message, font=("Consolas", 15, "bold"), text_color=YELLOW,
-            wraplength=820, justify="center"
-        ).pack(pady=(0, 30))
+            centered, text=message, font=("Arial", 15, "bold"), text_color=TEXT_DARK,
+            wraplength=620, width=620, justify="center"
+        ).pack(pady=(0, 26))
 
         def handle_continue():
             self._shark_animation_running = False
             self.after(10, on_continue)
 
         ctk.CTkButton(
-            self.card, text=button_text, width=240, height=44,
-            fg_color=SKY_BLUE, hover_color="#1BA6DB", text_color="#111111",
-            command=handle_continue
+            centered, text=button_text, width=240, height=46, corner_radius=12,
+            fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
+            font=("Arial", 14, "bold"), command=handle_continue
         ).pack()
 
     # ------------------------------------------------------------------
-    # Question flow — clickable "rows" instead of CTkButton, so long
-    # option text wraps onto multiple lines instead of getting cut off,
-    # and every row stays a consistent, aligned width.
+    # Question flow — card height is calculated from how many options
+    # this specific question actually has, so a 4-option question isn't
+    # stretched into empty space and a 6-option one doesn't get clipped.
     # ------------------------------------------------------------------
     def show_question(self):
+        q_index = self.current_question
+        q_data = QUESTIONS[q_index]
+
         self._shark_animation_running = False
         for widget in self.card.winfo_children():
             widget.destroy()
 
-        q_index = self.current_question
-        q_data = QUESTIONS[q_index]
-
-        ctk.CTkLabel(self.card, text=f"QUESTION {q_index + 1} / {len(QUESTIONS)}", font=("Consolas", 12, "bold"), text_color=SKY_BLUE).pack(pady=(28, 6))
-
-        progress_bg = ctk.CTkFrame(self.card, width=880, height=8, fg_color="#333333", corner_radius=0)
-        progress_bg.pack(pady=(0, 20))
-        fill_width = int(880 * (q_index / len(QUESTIONS)))
-        ctk.CTkFrame(progress_bg, width=fill_width, height=8, fg_color=YELLOW, corner_radius=0).place(x=0, y=0)
+        header = ctk.CTkFrame(self.card, fg_color="transparent")
+        header.pack(fill="x", padx=32, pady=(28, 0))
 
         ctk.CTkLabel(
-            self.card, text=q_data["question"], font=("Arial", 20, "bold"),
-            text_color=WHITE, wraplength=860, justify="center"
-        ).pack(pady=(0, 20))
+            header, text=f"QUESTION {q_index + 1} / {len(QUESTIONS)}",
+            font=("Arial", 12, "bold"), text_color=BLUE
+        ).pack(anchor="w")
 
-        options_container = ctk.CTkScrollableFrame(self.card, width=900, height=420, fg_color="transparent")
-        options_container.pack(fill="both", expand=True, padx=10)
+        progress_bg = ctk.CTkFrame(self.card, height=8, fg_color=ROW_BG, corner_radius=4)
+        progress_bg.pack(fill="x", padx=32, pady=(8, 22))
+        progress_bg.pack_propagate(False)
+        fill_frac = q_index / len(QUESTIONS)
+        fill_width = max(6, int(696 * fill_frac))
+        ctk.CTkFrame(progress_bg, width=fill_width, height=8, fg_color=YELLOW, corner_radius=4).place(x=0, y=0)
 
+        ctk.CTkLabel(
+            self.card, text=q_data["question"], font=("Arial", 21, "bold"),
+            text_color=TEXT_DARK, wraplength=680, width=680, justify="center"
+        ).pack(padx=32, pady=(0, 18))
+
+        options_container = ctk.CTkFrame(self.card, fg_color="transparent")
+        options_container.pack(fill="both", expand=True, padx=32)
+
+        last_row = None
         for letter, text, scores in q_data["options"]:
-            self._build_option_row(options_container, letter, text, scores)
+            last_row = self._build_option_row(options_container, letter, text, scores)
+
+        self.update_idletasks()
+        content_bottom = options_container.winfo_y() + last_row.winfo_y() + last_row.winfo_height()
+        card_h = max(300, content_bottom + 32)
+        self._resize_stage(card_h)
 
     def _build_option_row(self, parent, letter, text, scores):
-        row = ctk.CTkFrame(parent, fg_color=ROW_BG, corner_radius=8)
-        row.pack(fill="x", pady=6, padx=4)
+        row = ctk.CTkFrame(parent, fg_color=ROW_BG, corner_radius=12)
+        row.pack(fill="x", pady=5)
 
-        letter_lbl = ctk.CTkLabel(row, text=letter, font=("Arial", 14, "bold"), text_color=SKY_BLUE, width=28, anchor="n")
-        letter_lbl.pack(side="left", padx=(16, 4), pady=14, anchor="n")
+        letter_lbl = ctk.CTkLabel(row, text=letter, font=("Arial", 13, "bold"), text_color=BLUE, width=26, anchor="n")
+        letter_lbl.pack(side="left", padx=(16, 4), pady=12, anchor="n")
 
         text_lbl = ctk.CTkLabel(
-            row, text=text, font=("Arial", 13), text_color=WHITE,
-            wraplength=740, justify="left", anchor="w"
+            row, text=text, font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=580, width=580, justify="left", anchor="w"
         )
-        text_lbl.pack(side="left", fill="x", expand=True, padx=(0, 16), pady=14)
+        text_lbl.pack(side="left", fill="x", expand=True, padx=(0, 16), pady=12)
 
         widgets = [row, letter_lbl, text_lbl]
 
@@ -179,19 +241,21 @@ class QuizPage(ctk.CTk):
             self.handle_answer(scores)
 
         def on_enter(event=None):
-            row.configure(fg_color=SKY_BLUE)
-            letter_lbl.configure(text_color="#111111")
-            text_lbl.configure(text_color="#111111")
+            row.configure(fg_color=ROW_HOVER)
+            letter_lbl.configure(text_color="#0B1220")
+            text_lbl.configure(text_color="#0B1220")
 
         def on_leave(event=None):
             row.configure(fg_color=ROW_BG)
-            letter_lbl.configure(text_color=SKY_BLUE)
-            text_lbl.configure(text_color=WHITE)
+            letter_lbl.configure(text_color=BLUE)
+            text_lbl.configure(text_color=TEXT_DARK)
 
         for w in widgets:
             w.bind("<Button-1>", on_click)
             w.bind("<Enter>", on_enter)
             w.bind("<Leave>", on_leave)
+
+        return row
 
     def handle_answer(self, scores):
         self.answers.append(scores)
@@ -207,10 +271,10 @@ class QuizPage(ctk.CTk):
             )
 
     # ------------------------------------------------------------------
-    # Result screen — retro pixel-window styling, no scrolling (the card
-    # is sized generously enough to fit everything at once), only the
-    # TOP trait's description shown (never two stacked paragraphs), and
-    # a "top two" framing instead of "mix" when two traits are close.
+    # Result screen — now gets its own wider stage (RESULT_CARD_W) and a
+    # taller cap (RESULT_CARD_MAX) than the question/shark screens, so
+    # the two match cards and full breakdown have real room to breathe
+    # instead of everything getting squeezed into the same 760px box.
     # ------------------------------------------------------------------
     def show_result(self):
         try:
@@ -218,11 +282,12 @@ class QuizPage(ctk.CTk):
         except Exception as e:
             import traceback
             traceback.print_exc()
+            self._resize_stage(RESULT_CARD_MAX, card_w=RESULT_CARD_W)
             for widget in self.card.winfo_children():
                 widget.destroy()
             ctk.CTkLabel(
                 self.card, text=f"Something broke building your result:\n{e}",
-                font=("Consolas", 12), text_color=RED, wraplength=860, justify="center"
+                font=("Arial", 12), text_color=RED, wraplength=680, width=680, justify="center"
             ).pack(pady=200)
 
     def _build_result_screen(self):
@@ -235,71 +300,62 @@ class QuizPage(ctk.CTk):
         top_trait = summary["traits"][0]
         top_pct = summary["percentages"][top_trait]
 
-        # No CTkScrollableFrame here — a plain frame, since the card is
-        # now sized to hold headline + description + breakdown without
-        # needing to scroll.
-        content = ctk.CTkFrame(self.card, fg_color=CARD)
-        content.pack(pady=20, padx=20, fill="both", expand=True)
+        scroll = ctk.CTkScrollableFrame(self.card, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=32, pady=(28, 22))
+        content = scroll
 
-        # --- headline window ---
-        headline_body = self._pixel_window(content, "RESULT.EXE", border_color=YELLOW)
-        if summary["type"] == "single":
-            headline = f"YOU ARE A {top_trait.upper()}"
-            subline = None
-        else:
+        ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
+
+        if summary["type"] == "mix":
             second_trait = summary["traits"][1]
             second_pct = summary["percentages"][second_trait]
-            headline = "TOP TWO PERSONALITIES THAT MATCH YOU"
-            subline = f"{top_trait.upper()} {top_pct}%  •  {second_trait.upper()} {second_pct}%"
+            ctk.CTkLabel(
+                content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
+                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
+            ).pack(anchor="w", pady=(2, 4))
+            ctk.CTkLabel(
+                content,
+                text="These are the two personality types that best match your answers.",
+                font=("Arial", 13), text_color=MUTED, wraplength=850, width=850, justify="left"
+            ).pack(anchor="w", pady=(0, 18))
 
-        ctk.CTkLabel(headline_body, text="SCAN COMPLETE", font=("Consolas", 11, "bold"), text_color=GRAY).pack(anchor="w")
-        ctk.CTkLabel(headline_body, text=headline, font=("Arial", 26, "bold"), text_color=YELLOW, wraplength=880, justify="left").pack(anchor="w", pady=(8, 0))
-        if subline:
-            ctk.CTkLabel(headline_body, text=subline, font=("Consolas", 14), text_color=SKY_BLUE).pack(anchor="w", pady=(8, 0))
+            cards_row = ctk.CTkFrame(content, fg_color="transparent")
+            cards_row.pack(fill="x", pady=(0, 16))
 
-        # --- description window (top trait only, ever) ---
-        desc = PERSONALITY_DESCRIPTIONS[top_trait]
-        desc_body = self._pixel_window(content, f"{top_trait.upper()}.EXE", border_color=SKY_BLUE)
-        ctk.CTkLabel(
-            desc_body, text=desc["text"], font=("Arial", 14), text_color=WHITE,
-            wraplength=880, justify="left"
-        ).pack(anchor="w")
-        ctk.CTkLabel(
-            desc_body, text="You might like: " + desc["likes"], font=("Arial", 12, "italic"),
-            text_color=GRAY, wraplength=880, justify="left"
-        ).pack(anchor="w", pady=(12, 0))
+            self._build_match_card(cards_row, "#1 BEST MATCH", top_trait, top_pct, accent=YELLOW, side="left", pad=(0, 10))
+            self._build_match_card(cards_row, "#2 BEST MATCH", second_trait, second_pct, accent=BLUE, side="left", pad=(10, 0))
+        else:
+            ctk.CTkLabel(
+                content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
+                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
+            ).pack(anchor="w", pady=(2, 18))
 
-        # --- breakdown window: bigger, rounded bars, each trait in its
-        # own card-like row instead of a tight, cramped list ---
-        breakdown_body = self._pixel_window(content, "BREAKDOWN.EXE", border_color=YELLOW, pady=(0, 10))
+            self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
+
+        breakdown = self._panel(content, " ", accent=MUTED, fg_color=ROW_BG, pady=(6, 6))
         for trait, pct in summary["ranked"]:
-            row_wrap = ctk.CTkFrame(breakdown_body, fg_color=ROW_BG, corner_radius=8)
-            row_wrap.pack(fill="x", pady=5)
+            self._build_breakdown_row(breakdown, trait, pct)
 
-            row = ctk.CTkFrame(row_wrap, fg_color="transparent")
-            row.pack(fill="x", padx=14, pady=10)
+        self.save_status = ctk.CTkLabel(content, text="", font=("Arial", 11), text_color=MUTED)
+        self.save_status.pack(pady=(12, 0))
 
-            ctk.CTkLabel(row, text=trait, width=130, font=("Consolas", 14, "bold"), text_color=WHITE, anchor="w").pack(side="left")
-
-            bar_bg = ctk.CTkFrame(row, width=480, height=20, fg_color="#333333", corner_radius=10)
-            bar_bg.pack(side="left", padx=10)
-            bar_bg.pack_propagate(False)
-            bar_width = max(10, int(480 * (pct / 100)))
-            ctk.CTkFrame(bar_bg, width=bar_width, height=20, fg_color=SKY_BLUE, corner_radius=10).place(x=0, y=0)
-
-            ctk.CTkLabel(row, text=f"{pct}%", font=("Consolas", 13, "bold"), text_color=YELLOW, width=60).pack(side="left", padx=6)
-
-        save_status = ctk.CTkLabel(content, text="", font=("Consolas", 11), text_color=GRAY)
-        save_status.pack(pady=(14, 0))
-
-        ctk.CTkButton(
-            content, text="CONTINUE TO MOODSHARK", width=320, height=46,
+        continue_btn = ctk.CTkButton(
+            content, text="CONTINUE TO MOODSHARK", width=320, height=48, corner_radius=12,
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
-            command=self.finish_quiz
-        ).pack(pady=26)
+            font=("Arial", 13, "bold"), command=self.finish_quiz
+        )
+        continue_btn.pack(pady=(16, 0))
 
-        # save to MongoDB last — never let a DB hiccup block the result
-        # the person already earned from being displayed
+        # Measure the true content height and resize the window ONCE to
+        # fit it snugly, using the wider RESULT_CARD_W / taller
+        # RESULT_CARD_MAX so this screen actually has room — only a
+        # genuinely huge result (rare) will still need to scroll.
+        self.update()
+        content_h = continue_btn.winfo_y() + continue_btn.winfo_height()
+        scroll_padding = 28 + 22  # matches scroll.pack(pady=(28, 22)) above
+        card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + scroll_padding + 10))
+        self._resize_stage(card_h, card_w=RESULT_CARD_W)
+
         self.personality_result = {
             "raw_totals": raw_totals,
             "percentages": percentages,
@@ -312,15 +368,131 @@ class QuizPage(ctk.CTk):
             )
         except Exception as e:
             print(f"Warning: could not save personality result to MongoDB: {e}")
-            save_status.configure(
+            self.save_status.configure(
                 text="\u26A0 Result couldn't be saved to your account — check your connection.",
                 text_color=RED
             )
 
+    def _build_match_card(self, parent, label, trait, pct, accent, side="left", pad=(0, 0), full_width=False):
+        desc = PERSONALITY_DESCRIPTIONS[trait]
+        card = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=18, border_width=2, border_color=accent)
+        if full_width:
+            card.pack(fill="x")
+        else:
+            card.pack(side=side, fill="both", expand=True, padx=pad)
+
+        inner = ctk.CTkFrame(card, fg_color="transparent")
+        inner.pack(fill="both", expand=True, padx=26, pady=24)
+
+        label_color = "#B8A900" if accent == YELLOW else accent
+        ctk.CTkLabel(inner, text=label, font=("Arial", 11, "bold"), text_color=label_color).pack(anchor="w")
+        ctk.CTkLabel(inner, text=trait, font=("Arial", 24, "bold"), text_color=TEXT_DARK).pack(anchor="w", pady=(4, 2))
+        ctk.CTkLabel(inner, text=f"{pct}% match", font=("Arial", 12, "bold"), text_color=MUTED).pack(anchor="w", pady=(0, 12))
+
+        # width must match wraplength — CTkLabel draws onto an internal
+        # canvas sized from `width`, separate from where `wraplength`
+        # wraps the text. Without width, the canvas can end up narrower
+        # than the wrapped text needs, clipping it on the left.
+        # These widths are bigger now to match the wider result card:
+        # two side-by-side cards on a 940px stage get ~360px each of
+        # usable text width instead of the old ~290px on a 760px stage.
+        desc_w = 360 if not full_width else 820
+        ctk.CTkLabel(
+            inner, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=desc_w, width=desc_w, justify="left"
+        ).pack(anchor="w")
+
+    # ------------------------------------------------------------------
+    # One row in the "full breakdown" list. Only the trait NAME opens the
+    # popup now — the bar and percentage are visual only, not click targets.
+    # ------------------------------------------------------------------
+    def _build_breakdown_row(self, parent, trait, pct):
+        row = ctk.CTkFrame(parent, fg_color="transparent", corner_radius=8)
+        row.pack(fill="x", pady=3)
+
+        name_lbl = ctk.CTkLabel(row, text=trait, width=100, font=("Arial", 11, "bold"), text_color=BLUE, anchor="w")
+        name_lbl.pack(side="left")
+
+        bar_bg = ctk.CTkFrame(row, height=10, fg_color="#FFFFFF", corner_radius=5)
+        bar_bg.pack(side="left", fill="x", expand=True, padx=8)
+        bar_bg.pack_propagate(False)
+        bar_width = max(4, int(560 * (pct / 100)))
+        ctk.CTkFrame(bar_bg, width=bar_width, height=10, fg_color=BLUE, corner_radius=5).place(x=0, y=0)
+
+        ctk.CTkLabel(row, text=f"{pct}%", font=("Arial", 11, "bold"), text_color=MUTED, width=44).pack(side="left")
+
+        def open_popup(event=None, t=trait):
+            self._show_personality_popup(t)
+
+        def on_enter(event=None):
+            name_lbl.configure(text_color="#0B1220")
+
+        def on_leave(event=None):
+            name_lbl.configure(text_color=BLUE)
+
+        name_lbl.configure(cursor="hand2")
+        name_lbl.bind("<Button-1>", open_popup)
+        name_lbl.bind("<Enter>", on_enter)
+        name_lbl.bind("<Leave>", on_leave)
+
+    # ------------------------------------------------------------------
+    # Personality detail popup.
+    # ------------------------------------------------------------------
+    def _show_personality_popup(self, trait):
+        desc = PERSONALITY_DESCRIPTIONS[trait]
+
+        popup = ctk.CTkToplevel(self)
+        popup.title(trait)
+        popup.resizable(False, False)
+        popup.configure(fg_color=BG)
+
+        popup.withdraw()
+
+        w, h = 460, 340
+        self.update_idletasks()
+        x = self.winfo_x() + (self.winfo_width() - w) // 2
+        y = self.winfo_y() + (self.winfo_height() - h) // 2
+        popup.geometry(f"{w}x{h}+{x}+{y}")
+
+        card = ctk.CTkFrame(popup, fg_color=CARD, corner_radius=20, border_width=2, border_color=YELLOW)
+        card.pack(fill="both", expand=True, padx=14, pady=14)
+
+        header = ctk.CTkFrame(card, fg_color=ROW_BG, corner_radius=14)
+        header.pack(fill="x", padx=18, pady=(18, 0))
+
+        header_inner = ctk.CTkFrame(header, fg_color="transparent")
+        header_inner.pack(fill="x", padx=16, pady=12)
+
+        ctk.CTkLabel(
+            header_inner, text="PERSONALITY", font=("Arial", 10, "bold"), text_color=MUTED
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            header_inner, text=trait, font=("Arial", 24, "bold"), text_color=TEXT_DARK
+        ).pack(anchor="w", pady=(2, 0))
+
+        ctk.CTkLabel(
+            card, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=390, width=390, justify="left", anchor="w"
+        ).pack(fill="x", padx=18, pady=(16, 8))
+
+        ctk.CTkButton(
+            card, text="Close", width=120, height=38, corner_radius=12,
+            fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
+            font=("Arial", 13, "bold"), command=popup.destroy
+        ).pack(pady=(6, 18))
+
+        popup.update_idletasks()
+
+        def reveal():
+            popup.attributes("-topmost", True)
+            popup.deiconify()
+            popup.lift()
+            popup.focus_force()
+            popup.grab_set()
+
+        popup.after(30, reveal)
+
     def finish_quiz(self):
-        # New users land here right after their personality result. Next
-        # stop in the flow is the daily mood check-in (per the user flow:
-        # Register -> Quiz -> Mood Check-in -> Home).
         from mood_checkin import MoodCheckinPage
         username = self.username
         self.destroy()

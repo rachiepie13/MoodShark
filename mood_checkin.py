@@ -4,6 +4,10 @@ mood_checkin.py
 The DAILY mood check-in — completely separate from the one-time personality
 quiz in quiz.py / quiz_data.py. This file does not touch those.
 
+Visual language now matches quiz.py (same blue/white/yellow palette,
+rounded panels, logo instead of an animation) so the two screens feel like
+one app instead of two different apps stitched together.
+
 Flow:
     MoodCheckinPage(username)
         -> if today's check-in already exists in Mongo:
@@ -15,27 +19,53 @@ Flow:
 Exposes: MoodCheckinPage(username)
 """
 
+# DPI-awareness fix, same as quiz.py — must run before the first Tk/CTk
+# window is created in the process, in case this file is ever launched
+# on its own instead of via quiz.py.
+import sys
+if sys.platform == "win32":
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import random
-import math
 from datetime import date
 
 import customtkinter as ctk
-import tkinter as tk
+from PIL import Image
 from db import users_collection
 from quiz_data import PERSONALITY_DESCRIPTIONS  # reused for the "view profile" screen
 
 ctk.set_appearance_mode("dark")
 ctk.set_default_color_theme("blue")
 
-BG = "#111111"
-CARD = "#1B1B1B"
+# Same palette as quiz.py — sky blue background, white cards, yellow for
+# the main actions, sky blue for secondary accents.
+BG = "#B1C8EF"
+CARD = "#FFFFFF"
+ROW_BG = "#D6ECFF"
+ROW_HOVER = "#2AC7FF"
 YELLOW = "#E8FF2A"
 BLUE = "#2AC7FF"
-WHITE = "#FFFFFF"
-GRAY = "#A0A0A0"
+TEXT_DARK = "#0B1220"
+MUTED = "#5A7096"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
-ROW_BG = "#3A3D40"
+
+WINDOW_W = 880
+CARD_W = 760
+STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top + 60px bottom, matches quiz.py
+# Intro/result screens use a fixed height (like quiz.py's shark screen) so
+# their content can sit nicely centered. Question/welcome-back/profile
+# screens measure their real content height instead of guessing.
+STAGE_CARD_H = 460
+CARD_MIN_H = 380
+CARD_MAX_H = 760
 
 MAX_RECENT_QUESTIONS = 7  # how many recently-used question ids we remember per user
 
@@ -329,12 +359,12 @@ class MoodCheckinPage(ctk.CTk):
     def __init__(self, username):
         super().__init__()
         self.username = username
-        self.title("MoodShark - Daily Check-In")
-        self.geometry("1000x680")
+        self.title("Your daily Mood Check-in")
+        self.geometry(f"{WINDOW_W}x{STAGE_CARD_H + STAGE_MARGIN}")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
-        self.card = ctk.CTkFrame(self, width=700, height=520, corner_radius=20, fg_color=CARD)
+        self.card = ctk.CTkFrame(self, width=CARD_W, height=STAGE_CARD_H, corner_radius=24, fg_color=CARD)
         self.card.place(relx=0.5, rely=0.5, anchor="center")
         self.card.pack_propagate(False)
 
@@ -343,7 +373,6 @@ class MoodCheckinPage(ctk.CTk):
         self.broad_answer_category = None
         self.broad_question_id = None
         self.pinpoint_question_id = None
-        self._radar_running = False
 
         today_str = date.today().isoformat()
         existing_mood = self.user_doc.get("daily_mood")
@@ -353,126 +382,112 @@ class MoodCheckinPage(ctk.CTk):
             self.show_intro()
 
     # ------------------------------------------------------------------
-    # Retro pixel-window helper (same visual language as quiz.py)
+    # Resizes both the window and the card together, same helper as
+    # quiz.py — keeps the blue margin even on every screen.
     # ------------------------------------------------------------------
-    def _pixel_window(self, parent, title, border_color=YELLOW, pady=(0, 16)):
-        frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=0, border_width=2, border_color=border_color)
-        frame.pack(fill="x", pady=pady)
+    def _resize_stage(self, card_h):
+        window_h = card_h + STAGE_MARGIN
+        self.geometry(f"{WINDOW_W}x{window_h}")
+        self.card.configure(height=card_h)
 
-        titlebar = ctk.CTkFrame(frame, height=26, fg_color=border_color, corner_radius=0)
-        titlebar.pack(side="top", fill="x")
-        titlebar.pack_propagate(False)
-        ctk.CTkLabel(titlebar, text=title, font=("Consolas", 11, "bold"), text_color="#111111").pack(side="left", padx=10)
-        dots = ctk.CTkFrame(titlebar, fg_color=border_color)
-        dots.pack(side="right", padx=8)
-        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111").pack(side="left", padx=2)
-        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111").pack(side="left", padx=2)
+    # ------------------------------------------------------------------
+    # Measures whatever was just packed into the card and resizes ONCE
+    # to fit it — same "build, measure, resize once" approach used in
+    # quiz.py, so screens with variable-length content (a 6-option
+    # question, a longer personality description) never show dead space
+    # or clip, and there's no flicker from resizing twice.
+    # ------------------------------------------------------------------
+    def _fit_card(self, min_h=CARD_MIN_H, max_h=CARD_MAX_H, bottom_pad=30):
+        self.update_idletasks()
+        max_bottom = 0
+        for child in self.card.winfo_children():
+            bottom = child.winfo_y() + child.winfo_height()
+            if bottom > max_bottom:
+                max_bottom = bottom
+        card_h = min(max_h, max(min_h, max_bottom + bottom_pad))
+        self._resize_stage(card_h)
 
-        body = ctk.CTkFrame(frame, fg_color=CARD, corner_radius=0)
-        body.pack(side="top", fill="both", expand=True, padx=16, pady=16)
+    # ------------------------------------------------------------------
+    # Small rounded panel helper, same visual language as quiz.py.
+    # ------------------------------------------------------------------
+    def _panel(self, parent, title, accent=BLUE, fg_color=ROW_BG, pady=(0, 14), padx=32):
+        frame = ctk.CTkFrame(parent, fg_color=fg_color, corner_radius=16)
+        frame.pack(fill="x", padx=padx, pady=pady)
+
+        body = ctk.CTkFrame(frame, fg_color="transparent")
+        body.pack(fill="both", expand=True, padx=20, pady=16)
+
+        if title:
+            ctk.CTkLabel(
+                body, text=title, font=("Arial", 11, "bold"), text_color=accent
+            ).pack(anchor="w", pady=(0, 6))
         return body
 
     def _clear_card(self):
-        self._radar_running = False
         for widget in self.card.winfo_children():
             widget.destroy()
 
     # ------------------------------------------------------------------
-    # Radar sweep animation — the mood check-in's own visual identity
-    # (separate from the quiz's circling shark), fits the "daily scan" idea.
-    # ------------------------------------------------------------------
-    def _build_radar(self, parent, size=170):
-        canvas = tk.Canvas(parent, width=size, height=size, bg=CARD, highlightthickness=0)
-        canvas.pack(pady=(10, 0))
-
-        cx, cy = size / 2, size / 2
-        for r in (size * 0.48, size * 0.32, size * 0.16):
-            canvas.create_oval(cx - r, cy - r, cx + r, cy + r, outline="#2a3d45", width=1)
-        canvas.create_oval(cx - 3, cy - 3, cx + 3, cy + 3, fill=BLUE, outline="")
-
-        angle = {"value": 0}
-        self._radar_running = True
-        sweep_len = size * 0.48
-
-        def draw_sweep():
-            if not self._radar_running:
-                return
-            canvas.delete("sweep")
-            angle["value"] = (angle["value"] + 5) % 360
-            rad = math.radians(angle["value"])
-            x2 = cx + sweep_len * math.cos(rad)
-            y2 = cy + sweep_len * math.sin(rad)
-            # a short fading trail effect via a few faded lines behind the main sweep
-            for i in range(6, 0, -1):
-                trail_rad = math.radians(angle["value"] - i * 4)
-                tx = cx + sweep_len * math.cos(trail_rad)
-                ty = cy + sweep_len * math.sin(trail_rad)
-                shade = max(0, 90 - i * 12)
-                color = f"#{shade:02x}{shade + 60:02x}{shade + 70:02x}"
-                canvas.create_line(cx, cy, tx, ty, fill=color, width=2, tags="sweep")
-            canvas.create_line(cx, cy, x2, y2, fill=BLUE, width=2, tags="sweep")
-            try:
-                self.after(35, draw_sweep)
-            except Exception:
-                return
-
-        draw_sweep()
-        return canvas
-
-    def _build_sparkles(self, parent, count=6):
-        sparkles = ["\u2726", "\u2605", "\u2727"]
-        spots = [(30, 20), (650, 40), (30, 480), (660, 470), (20, 250), (670, 250)]
-        for i, (x, y) in enumerate(spots[:count]):
-            ctk.CTkLabel(parent, text=random.choice(sparkles), font=("Arial", random.choice([14, 18, 22])), text_color=YELLOW).place(x=x, y=y)
-
-    # ------------------------------------------------------------------
-    # Welcome back screen (today's check-in already exists)
-    # ------------------------------------------------------------------
-    def show_welcome_back(self, existing_mood):
-        self._clear_card()
-        body = self._pixel_window(self.card, "MOODSHARK.EXE", border_color=YELLOW, pady=(60, 20))
-        ctk.CTkLabel(body, text=f"WELCOME BACK, {self.username.upper()}", font=("Arial", 20, "bold"), text_color=YELLOW).pack(anchor="w")
-        ctk.CTkLabel(body, text="Today's mood:", font=("Consolas", 12), text_color=GRAY).pack(anchor="w", pady=(14, 2))
-        mood_text = existing_mood.get("mood", "Unknown")
-        ctk.CTkLabel(body, text=mood_text.upper(), font=("Arial", 26, "bold"), text_color=BLUE).pack(anchor="w")
-
-        btn_frame = ctk.CTkFrame(self.card, fg_color="transparent")
-        btn_frame.pack(pady=20)
-
-        ctk.CTkButton(btn_frame, text="VIEW MY PROFILE", width=280, height=42, fg_color=BLUE, hover_color="#1BA6DB", text_color="#111111", command=self.show_profile).pack(pady=6)
-        ctk.CTkButton(btn_frame, text="RETAKE MOOD CHECK-IN", width=280, height=42, fg_color=ROW_BG, hover_color="#4a4d50", text_color=WHITE, command=self.show_intro).pack(pady=6)
-        ctk.CTkButton(btn_frame, text="SEE RECOMMENDATIONS", width=280, height=42, fg_color=YELLOW, hover_color="#D6EB00", text_color="black", command=self.finish).pack(pady=6)
-
-    # ------------------------------------------------------------------
-    # Intro screen
+    # Intro screen — logo instead of an animation, matches quiz.py's
+    # shark-screen layout (a rounded stage box + headline + buttons, all
+    # vertically centered).
     # ------------------------------------------------------------------
     def show_intro(self):
+        self._resize_stage(STAGE_CARD_H)
         self._clear_card()
-        self._build_sparkles(self.card)
 
-        ctk.CTkLabel(self.card, text="MOODSHARK // DAILY SCAN", font=("Consolas", 12, "bold"), text_color=BLUE).pack(pady=(35, 0))
-        self._build_radar(self.card)
+        centered = ctk.CTkFrame(self.card, fg_color="transparent")
+        centered.pack(expand=True)
 
-        ctk.CTkLabel(self.card, text="Two questions. That's all.", font=("Arial", 22, "bold"), text_color=WHITE).pack(pady=(18, 4))
         ctk.CTkLabel(
-            self.card, text="Quick, casual, and it helps MoodShark tune today's picks to how you're actually feeling.",
-            font=("Consolas", 11), text_color=GRAY, wraplength=480, justify="center"
+            centered, text="Your daily Mood Check-in", font=("Arial", 12, "bold"), text_color=BLUE
+        ).pack(pady=(0, 16))
+
+        stage = ctk.CTkFrame(centered, width=640, height=170, fg_color=ROW_BG, corner_radius=18)
+        stage.pack(pady=(0, 26))
+        stage.pack_propagate(False)
+
+        try:
+            logo_img = ctk.CTkImage(
+                light_image=Image.open("assets/logo.png"),
+                dark_image=Image.open("assets/logo.png"),
+                size=(650, 200)
+            )
+            logo_lbl = ctk.CTkLabel(stage, image=logo_img, text="")
+            logo_lbl.image = logo_img
+        except Exception:
+            logo_lbl = ctk.CTkLabel(stage, text="MOODSHARK", font=("Arial", 22, "bold"), text_color=BLUE)
+        logo_lbl.place(relx=0.5, rely=0.5, anchor="center")
+
+        ctk.CTkLabel(
+            centered, text="What’s swimming through your mind today?", font=("Arial", 22, "bold"), text_color=BLUE
+        ).pack(pady=(0, 6))
+        ctk.CTkLabel(
+            centered, text="Help MoodShark tune today's picks to how you're feeling.",
+            font=("Arial", 12), text_color=MUTED, wraplength=560, width=560, justify="center"
         ).pack()
 
-        btn_frame = ctk.CTkFrame(self.card, fg_color="transparent")
-        btn_frame.pack(pady=22)
-        ctk.CTkButton(btn_frame, text="START CHECK-IN", width=240, height=42, fg_color=BLUE, hover_color="#1BA6DB", text_color="#111111", command=self.show_broad_question).pack(pady=6)
-        ctk.CTkButton(btn_frame, text="SKIP FOR NOW", width=240, height=36, fg_color="transparent", hover=False, text_color=GRAY, command=self.finish).pack(pady=4)
+        btn_frame = ctk.CTkFrame(centered, fg_color="transparent")
+        btn_frame.pack(pady=(24, 0))
+        ctk.CTkButton(
+            btn_frame, text="START CHECK-IN", width=240, height=46, corner_radius=12,
+            fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
+            font=("Arial", 14, "bold"), command=self.show_broad_question
+        ).pack(pady=6)
+        ctk.CTkButton(
+            btn_frame, text="Skip for now", width=240, height=32, corner_radius=10,
+            fg_color="transparent", hover_color=ROW_BG, text_color=MUTED,
+            font=("Arial", 12), command=self.finish
+        ).pack(pady=4)
 
     # ------------------------------------------------------------------
     # Question 1 — broad / funnel
     # ------------------------------------------------------------------
     def show_broad_question(self):
-        self._clear_card()
         recent = self.user_doc.get("last_used_question_ids", [])
         question = _pick_broad_question(recent)
         self.broad_question_id = question["id"]
-        self._render_question(question, step_label="QUESTION 1 / 2", on_pick=self._handle_broad_answer)
+        self._render_question(question, step_index=0, on_pick=self._handle_broad_answer)
 
     def _handle_broad_answer(self, option):
         self.broad_answer_scoring = option["scoring"]
@@ -483,11 +498,10 @@ class MoodCheckinPage(ctk.CTk):
     # Question 2 — pinpoint, chosen from the category the broad answer fell into
     # ------------------------------------------------------------------
     def show_pinpoint_question(self):
-        self._clear_card()
         recent = self.user_doc.get("last_used_question_ids", [])
         question = _pick_pinpoint_question(self.broad_answer_category, recent)
         self.pinpoint_question_id = question["id"]
-        self._render_question(question, step_label="QUESTION 2 / 2", on_pick=self._handle_pinpoint_answer)
+        self._render_question(question, step_index=1, on_pick=self._handle_pinpoint_answer)
 
     def _handle_pinpoint_answer(self, option):
         combined = dict(self.broad_answer_scoring)
@@ -496,39 +510,51 @@ class MoodCheckinPage(ctk.CTk):
         self.show_result(combined)
 
     # ------------------------------------------------------------------
-    # Shared question renderer (clickable wrapping rows, like quiz.py)
+    # Shared question renderer — same visual pattern as quiz.py's
+    # show_question (progress bar, question text, clickable option rows),
+    # sized to its real content instead of a scrollable frame with a
+    # fixed height.
     # ------------------------------------------------------------------
-    def _render_question(self, question, step_label, on_pick):
-        ctk.CTkLabel(self.card, text=step_label, font=("Consolas", 11, "bold"), text_color=BLUE).pack(pady=(30, 5))
+    def _render_question(self, question, step_index, on_pick):
+        self._clear_card()
 
-        progress_bg = ctk.CTkFrame(self.card, width=620, height=8, fg_color="#333333", corner_radius=0)
-        progress_bg.pack(pady=(0, 20))
-        fill = 0 if step_label.startswith("QUESTION 1") else 310
-        ctk.CTkFrame(progress_bg, width=fill, height=8, fg_color=YELLOW, corner_radius=0).place(x=0, y=0)
+        header = ctk.CTkFrame(self.card, fg_color="transparent")
+        header.pack(fill="x", padx=32, pady=(28, 0))
+        ctk.CTkLabel(
+            header, text=f"QUESTION {step_index + 1} / 2", font=("Arial", 12, "bold"), text_color=BLUE
+        ).pack(anchor="w")
+
+        progress_bg = ctk.CTkFrame(self.card, height=8, fg_color=ROW_BG, corner_radius=4)
+        progress_bg.pack(fill="x", padx=32, pady=(8, 22))
+        progress_bg.pack_propagate(False)
+        fill_width = max(6, int(696 * (step_index / 2)))
+        ctk.CTkFrame(progress_bg, width=fill_width, height=8, fg_color=YELLOW, corner_radius=4).place(x=0, y=0)
 
         ctk.CTkLabel(
-            self.card, text=question["text"], font=("Arial", 19, "bold"),
-            text_color=WHITE, wraplength=620, justify="center"
-        ).pack(pady=(0, 20))
+            self.card, text=question["text"], font=("Arial", 20, "bold"),
+            text_color=TEXT_DARK, wraplength=680, width=680, justify="center"
+        ).pack(padx=32, pady=(0, 18))
 
-        options_container = ctk.CTkScrollableFrame(self.card, width=650, height=300, fg_color="transparent")
-        options_container.pack(fill="both", expand=True, padx=10)
+        options_container = ctk.CTkFrame(self.card, fg_color="transparent")
+        options_container.pack(fill="both", expand=True, padx=32)
 
         for option in question["options"]:
             self._build_option_row(options_container, option, on_pick)
 
-    def _build_option_row(self, parent, option, on_pick):
-        row = ctk.CTkFrame(parent, fg_color=ROW_BG, corner_radius=8)
-        row.pack(fill="x", pady=6, padx=4)
+        self._fit_card(bottom_pad=30)
 
-        letter_lbl = ctk.CTkLabel(row, text=option["label"], font=("Arial", 14, "bold"), text_color=BLUE, width=28, anchor="n")
-        letter_lbl.pack(side="left", padx=(16, 4), pady=14, anchor="n")
+    def _build_option_row(self, parent, option, on_pick):
+        row = ctk.CTkFrame(parent, fg_color=ROW_BG, corner_radius=12)
+        row.pack(fill="x", pady=5)
+
+        letter_lbl = ctk.CTkLabel(row, text=option["label"], font=("Arial", 13, "bold"), text_color=BLUE, width=26, anchor="n")
+        letter_lbl.pack(side="left", padx=(16, 4), pady=12, anchor="n")
 
         text_lbl = ctk.CTkLabel(
-            row, text=option["text"], font=("Arial", 13), text_color=WHITE,
-            wraplength=530, justify="left", anchor="w"
+            row, text=option["text"], font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=580, width=580, justify="left", anchor="w"
         )
-        text_lbl.pack(side="left", fill="x", expand=True, padx=(0, 16), pady=14)
+        text_lbl.pack(side="left", fill="x", expand=True, padx=(0, 16), pady=12)
 
         widgets = [row, letter_lbl, text_lbl]
 
@@ -536,14 +562,14 @@ class MoodCheckinPage(ctk.CTk):
             on_pick(option)
 
         def on_enter(event=None):
-            row.configure(fg_color=BLUE)
-            letter_lbl.configure(text_color="#111111")
-            text_lbl.configure(text_color="#111111")
+            row.configure(fg_color=ROW_HOVER)
+            letter_lbl.configure(text_color="#0B1220")
+            text_lbl.configure(text_color="#0B1220")
 
         def on_leave(event=None):
             row.configure(fg_color=ROW_BG)
             letter_lbl.configure(text_color=BLUE)
-            text_lbl.configure(text_color=WHITE)
+            text_lbl.configure(text_color=TEXT_DARK)
 
         for w in widgets:
             w.bind("<Button-1>", on_click)
@@ -551,7 +577,60 @@ class MoodCheckinPage(ctk.CTk):
             w.bind("<Leave>", on_leave)
 
     # ------------------------------------------------------------------
-    # Result screen + save
+    # Welcome back screen (today's check-in already exists)
+    # ------------------------------------------------------------------
+    def show_welcome_back(self, existing_mood):
+        self._clear_card()
+
+        header = ctk.CTkFrame(self.card, fg_color="transparent")
+        header.pack(fill="x", padx=32, pady=(32, 0))
+        ctk.CTkLabel(
+            header, text=f"Welcome back, {self.username}", font=("Arial", 22, "bold"), text_color=TEXT_DARK
+        ).pack(anchor="w")
+
+        mood_text = existing_mood.get("mood", "unknown")
+        panel = self._panel(self.card, "TODAY'S MOOD", accent=BLUE, pady=(18, 0))
+        ctk.CTkLabel(
+            panel, text=f'We sense a {mood_text.lower()} mood today.',
+            font=("Arial", 18, "bold"), text_color=YELLOW, wraplength=660, width=660, justify="left"
+        ).pack(anchor="w")
+        secondary = existing_mood.get("secondary_mood")
+        if secondary:
+            ctk.CTkLabel(
+                panel, text=f"with a little {secondary.lower()} mixed in",
+                font=("Arial", 12), text_color=MUTED
+            ).pack(anchor="w", pady=(6, 0))
+
+        btn_frame = ctk.CTkFrame(self.card, fg_color="transparent")
+        btn_frame.pack(padx=32, pady=(24, 0), fill="x")
+
+        ctk.CTkButton(
+            btn_frame, text="VIEW MY PROFILE", height=44, corner_radius=12,
+            fg_color=BLUE, hover_color="#1BA6DB", text_color="white",
+            font=("Arial", 13, "bold"), command=self.show_profile
+        ).pack(fill="x", pady=6)
+        ctk.CTkButton(
+            btn_frame, text="RETAKE CHECK-IN", height=44, corner_radius=12,
+            fg_color=ROW_BG, hover_color="#C3E0FB", text_color=TEXT_DARK,
+            font=("Arial", 13, "bold"), command=self.show_intro
+        ).pack(fill="x", pady=6)
+        ctk.CTkButton(
+            btn_frame, text="SEE RECOMMENDATIONS", height=46, corner_radius=12,
+            fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
+            font=("Arial", 13, "bold"), command=self.finish
+        ).pack(fill="x", pady=(6, 30))
+
+        self._fit_card(bottom_pad=20)
+
+    # ------------------------------------------------------------------
+    # Result screen — mood is now a sentence instead of a boxed stat,
+    # e.g. "Well, aren't you in a 'joyful' mood today." Fixed height,
+    # vertically centered, same feel as the intro/shark screens.
+    # ------------------------------------------------------------------
+        # ------------------------------------------------------------------
+    # Result screen — mood is now a sentence instead of a boxed stat,
+    # e.g. "We sense a 'joyful' mood today."
+    # Fixed height, vertically centered, same feel as the intro/shark screens.
     # ------------------------------------------------------------------
     def show_result(self, combined_scores):
         self._clear_card()
@@ -560,17 +639,32 @@ class MoodCheckinPage(ctk.CTk):
         primary_mood = top[0][0]
         today_str = date.today().isoformat()
 
-        body = self._pixel_window(self.card, "TODAY'S SIGNAL", border_color=YELLOW, pady=(70, 20))
-        ctk.CTkLabel(body, text="Your mood today seems to be:", font=("Consolas", 12), text_color=GRAY).pack(anchor="w")
-        ctk.CTkLabel(body, text=primary_mood.upper(), font=("Arial", 28, "bold"), text_color=BLUE).pack(anchor="w", pady=(6, 0))
+        centered = ctk.CTkFrame(self.card, fg_color="transparent")
+        centered.pack(expand=True)
+
+        ctk.CTkLabel(
+            centered, text="TODAY'S SIGNAL", font=("Arial", 12, "bold"), text_color=YELLOW
+        ).pack(pady=(0, 18))
+
+        ctk.CTkLabel(
+            centered, text=f'We sense a {primary_mood.lower()} mood today.',
+            font=("Arial", 26, "bold"), text_color=BLUE,
+            wraplength=640, width=640, justify="center"
+        ).pack()
+
         if len(top) > 1:
-            ctk.CTkLabel(body, text=f"(with a strong touch of {top[1][0]})", font=("Consolas", 11, "italic"), text_color=GRAY).pack(anchor="w", pady=(6, 0))
+            ctk.CTkLabel(
+                centered, text=f"With a little {top[1][0].lower()} mixed in.",
+                font=("Arial", 13), text_color=MUTED
+            ).pack(pady=(8, 0))
 
         ctk.CTkButton(
-            self.card, text="CONTINUE", width=260, height=42,
+            centered, text="CONTINUE", width=260, height=46, corner_radius=12,
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
-            command=self.finish
-        ).pack(pady=25)
+            font=("Arial", 14, "bold"), command=self.finish
+        ).pack(pady=(30, 0))
+
+        self._resize_stage(STAGE_CARD_H)
 
         # save to Mongo — never let a hiccup here block the result from showing
         daily_mood_doc = {
@@ -600,26 +694,47 @@ class MoodCheckinPage(ctk.CTk):
         personality = self.user_doc.get("personality")
 
         if not personality or not personality.get("top_traits"):
-            ctk.CTkLabel(self.card, text="No personality profile found yet.", font=("Arial", 14), text_color=GRAY).pack(pady=200)
-            ctk.CTkButton(self.card, text="BACK", width=200, height=38, fg_color=BLUE, text_color="#111111", command=lambda: self.show_welcome_back(self.user_doc.get("daily_mood", {}))).pack()
+            centered = ctk.CTkFrame(self.card, fg_color="transparent")
+            centered.pack(expand=True)
+            ctk.CTkLabel(
+                centered, text="No personality profile found yet.", font=("Arial", 14), text_color=MUTED
+            ).pack(pady=(0, 16))
+            ctk.CTkButton(
+                centered, text="BACK", width=200, height=40, corner_radius=12,
+                fg_color=BLUE, hover_color="#1BA6DB", text_color="white", font=("Arial", 13, "bold"),
+                command=lambda: self.show_welcome_back(self.user_doc.get("daily_mood", {}))
+            ).pack()
+            self._resize_stage(STAGE_CARD_H)
             return
-
-        scroll = ctk.CTkScrollableFrame(self.card, width=660, height=480, fg_color=CARD)
-        scroll.pack(pady=15, padx=15, fill="both", expand=True)
 
         top_trait = personality["top_traits"][0]
         desc = PERSONALITY_DESCRIPTIONS.get(top_trait, {})
 
-        body = self._pixel_window(scroll, f"{top_trait.upper()}.EXE", border_color=BLUE)
-        ctk.CTkLabel(body, text=f"YOU ARE A {top_trait.upper()}", font=("Arial", 22, "bold"), text_color=YELLOW, wraplength=600, justify="left").pack(anchor="w")
+        header = ctk.CTkFrame(self.card, fg_color="transparent")
+        header.pack(fill="x", padx=32, pady=(32, 0))
+        ctk.CTkLabel(header, text="YOUR PERSONALITY", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
+        ctk.CTkLabel(
+            header, text=f"You are a {top_trait}", font=("Arial", 24, "bold"), text_color=TEXT_DARK
+        ).pack(anchor="w", pady=(2, 0))
+
+        panel = self._panel(self.card, None, accent=BLUE, fg_color=ROW_BG, pady=(18, 0))
         if desc:
-            ctk.CTkLabel(body, text=desc["text"], font=("Arial", 13), text_color=WHITE, wraplength=600, justify="left").pack(anchor="w", pady=(10, 0))
-            ctk.CTkLabel(body, text="You might like: " + desc["likes"], font=("Arial", 12, "italic"), text_color=GRAY, wraplength=600, justify="left").pack(anchor="w", pady=(10, 0))
+            ctk.CTkLabel(
+                panel, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
+                wraplength=660, width=660, justify="left"
+            ).pack(anchor="w")
+            ctk.CTkLabel(
+                panel, text="You might like: " + desc["likes"], font=("Arial", 12, "italic"), text_color=MUTED,
+                wraplength=660, width=660, justify="left"
+            ).pack(anchor="w", pady=(12, 0))
 
         ctk.CTkButton(
-            scroll, text="BACK", width=200, height=38, fg_color=ROW_BG, hover_color="#4a4d50", text_color=WHITE,
+            self.card, text="BACK", width=200, height=40, corner_radius=12,
+            fg_color=ROW_BG, hover_color="#C3E0FB", text_color=TEXT_DARK, font=("Arial", 13, "bold"),
             command=lambda: self.show_welcome_back(self.user_doc.get("daily_mood", {}))
-        ).pack(pady=20)
+        ).pack(padx=32, pady=(24, 0), anchor="w")
+
+        self._fit_card(bottom_pad=30)
 
     # ------------------------------------------------------------------
     def finish(self):
