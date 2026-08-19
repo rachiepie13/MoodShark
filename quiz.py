@@ -38,20 +38,24 @@ MUTED = "#5A7096"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
 
-# Every screen sizes itself to what it actually needs. Question/shark
-# screens use the compact width below; the result screen gets its own,
-# wider size (see RESULT_CARD_W / RESULT_CARD_MAX) since it has to fit
-# two match cards side by side plus a 10-row breakdown — the old shared
-# 760px width made that section feel cramped and forced it to scroll
-# more than it needed to.
 WINDOW_W = 880
 CARD_W = 760
 STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top/bottom, 60px sides
 SHARK_CARD_H = 440
 
+# Result screen keeps the same width as everything else (not widened) —
+# only its height flexes, and it's measured from the real content instead
+# of a fixed number, so a short single-match result doesn't leave dead
+# space and a long mix result doesn't get clipped.
 RESULT_CARD_W = CARD_W
-RESULT_CARD_MAX = 880
-RESULT_CARD_MIN = 880
+RESULT_CARD_MAX = 1000
+RESULT_CARD_MIN = 480
+
+# Reserved space at the top of the screen so the window never sits high
+# enough for its titlebar/content to be hidden behind a menu bar or
+# another app's window — this is what was causing the cut-off top.
+TOP_INSET = 60
+BOTTOM_INSET = 40
 
 
 class QuizPage(ctk.CTk):
@@ -59,7 +63,6 @@ class QuizPage(ctk.CTk):
         super().__init__()
         self.username = username
         self.title("MoodShark - Personality Quiz")
-        self.geometry(f"{WINDOW_W}x{SHARK_CARD_H + STAGE_MARGIN}")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
@@ -71,6 +74,8 @@ class QuizPage(ctk.CTk):
         self.card.place(relx=0.5, rely=0.5, anchor="center")
         self.card.pack_propagate(False)
 
+        self._resize_stage(SHARK_CARD_H)
+
         self.show_shark_screen(
             message="Something's circling. Might as well find out what it wants.",
             button_text="START QUIZ",
@@ -78,19 +83,25 @@ class QuizPage(ctk.CTk):
         )
 
     # ------------------------------------------------------------------
-    # Resizes both the window and the card together. card_w defaults to
-    # the standard compact width; the result screen passes RESULT_CARD_W
-    # to get its own wider stage.
+    # Resizes AND repositions the window together. Repositioning on every
+    # call (instead of only sizing) is what stops the window from ever
+    # sitting with its top edge above the visible screen area — it's
+    # always kept centered and at least TOP_INSET pixels down.
     # ------------------------------------------------------------------
-    def _resize_stage(self, card_h, card_w=CARD_W):
-        window_w = card_w + STAGE_MARGIN
+    def _resize_stage(self, card_h):
         window_h = card_h + STAGE_MARGIN
-        max_window_h = self.winfo_screenheight() - 100  # leave room for menu bar + dock
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        top_margin = 60      # room for the menu bar + window title bar
+        bottom_margin = 90   # room for the dock
+        max_window_h = screen_h - top_margin - bottom_margin
         window_h = min(window_h, max_window_h)
         card_h = window_h - STAGE_MARGIN
-        self.geometry(f"{window_w}x{window_h}")
-        self.card.configure(width=card_w, height=card_h)
-
+        x = (screen_w - WINDOW_W) // 2
+        y = top_margin
+        self.geometry(f"{WINDOW_W}x{window_h}+{x}+{y}")
+        self.card.configure(height=card_h)
+        return card_h
     # ------------------------------------------------------------------
     # Small rounded panel helper, used anywhere we need a soft light-blue
     # block with an optional title above it (the breakdown section uses
@@ -111,9 +122,7 @@ class QuizPage(ctk.CTk):
         return body
 
     # ------------------------------------------------------------------
-    # Bordered section with a colored titlebar and decorative dots,
-    # modernized from the old retro pixel-window style with rounded
-    # corners to match the current aesthetic.
+    # Bordered section with a colored titlebar and decorative dots.
     # ------------------------------------------------------------------
     def _pixel_window(self, parent, title, accent=BLUE, pady=(0, 16)):
         frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14, border_width=2, border_color=accent)
@@ -294,10 +303,9 @@ class QuizPage(ctk.CTk):
             )
 
     # ------------------------------------------------------------------
-    # Result screen — now gets its own wider stage (RESULT_CARD_W) and a
-    # taller cap (RESULT_CARD_MAX) than the question/shark screens, so
-    # the two match cards and full breakdown have real room to breathe
-    # instead of everything getting squeezed into the same 760px box.
+    # Result screen — pixel-window layout, no "SCAN COMPLETE" line, and
+    # sized from the real measured content (like the newer file did)
+    # instead of a fixed 880 every time.
     # ------------------------------------------------------------------
     def show_result(self):
         try:
@@ -326,9 +334,8 @@ class QuizPage(ctk.CTk):
         scroll = ctk.CTkScrollableFrame(self.card, fg_color="transparent")
         scroll.pack(fill="both", expand=True, padx=20, pady=20)
 
-        # ── headline section ──
+        # ── headline section (no "SCAN COMPLETE" line anymore) ──
         headline_body = self._pixel_window(scroll, "RESULT.EXE", accent=YELLOW)
-        ctk.CTkLabel(headline_body, text="\U0001F988 SCAN COMPLETE", font=("Consolas", 10, "bold"), text_color=MUTED).pack(anchor="w")
 
         if summary["type"] == "mix":
             second_trait = summary["traits"][1]
@@ -337,7 +344,7 @@ class QuizPage(ctk.CTk):
                 headline_body,
                 text=f"YOU'RE A MIX OF A {top_trait.upper()} & {second_trait.upper()}",
                 font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
-            ).pack(anchor="w", pady=(6, 0))
+            ).pack(anchor="w")
             ctk.CTkLabel(
                 headline_body,
                 text=f"{top_trait} {top_pct}%  •  {second_trait} {second_pct}%",
@@ -348,7 +355,7 @@ class QuizPage(ctk.CTk):
                 headline_body,
                 text=f"YOU ARE A {top_trait.upper()}",
                 font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
-            ).pack(anchor="w", pady=(6, 0))
+            ).pack(anchor="w")
 
         # ── match cards ──
         if summary["type"] == "mix":
@@ -386,9 +393,17 @@ class QuizPage(ctk.CTk):
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
             font=("Arial", 13, "bold"), command=self.finish_quiz
         )
-        continue_btn.pack(pady=(16, 40))
+        continue_btn.pack(pady=(16, 20))
 
-        self._resize_stage(RESULT_CARD_MAX, card_w=RESULT_CARD_W)
+        # Measure the true content height (from the scroll frame's own
+        # coordinate space) and resize the window ONCE to fit it — this
+        # is the "new file" behavior: no more fixed 880 regardless of
+        # how much content there actually is.
+        self.update()
+        content_h = continue_btn.winfo_y() + continue_btn.winfo_height()
+        scroll_padding = 20 + 20  # matches scroll.pack(pady=20) above
+        card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + scroll_padding + 10))
+        self._resize_stage(card_h, card_w=RESULT_CARD_W)
 
         self.personality_result = {
             "raw_totals": raw_totals,
@@ -427,9 +442,6 @@ class QuizPage(ctk.CTk):
         # canvas sized from `width`, separate from where `wraplength`
         # wraps the text. Without width, the canvas can end up narrower
         # than the wrapped text needs, clipping it on the left.
-        # These widths are bigger now to match the wider result card:
-        # two side-by-side cards on a 940px stage get ~360px each of
-        # usable text width instead of the old ~290px on a 760px stage.
         desc_w = 300 if not full_width else 650
         ctk.CTkLabel(
             inner, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
