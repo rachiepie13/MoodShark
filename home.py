@@ -17,7 +17,6 @@ import re
 import threading
 import customtkinter as ctk
 import tkinter as tk
-import math
 from PIL import Image
 import billboard_charts
 import requests
@@ -227,9 +226,9 @@ class HomePage(ctk.CTk):
         self.bind_all("<MouseWheel>", self._vertical_wheel)
 
         self._build_header()
-        self._build_trending_section()
         self._build_today_section()
         self._build_personality_sections()
+        self._build_trending_section()
 
     def _make_wheel_handler(self, canvas, orientation):
         def on_wheel(event):

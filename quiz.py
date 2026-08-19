@@ -53,17 +53,6 @@ RESULT_CARD_W = CARD_W
 RESULT_CARD_MAX = 900
 RESULT_CARD_MIN = 700
 
-BG = "#B1C8EF"
-CARD = "#FFFFFF"
-YELLOW = "#E8FF2A"
-BLUE = "#B1C8EF"
-WHITE = "#FFFFFF"
-GRAY = "#A0A0A0"
-RED = "#FF5C5C"
-GREEN = "#6BFF8F"
-ROW_BG = "#B1C8EF"
-
-
 
 class QuizPage(ctk.CTk):
     def __init__(self, username):
@@ -135,8 +124,6 @@ class QuizPage(ctk.CTk):
 
         stage = ctk.CTkFrame(centered, width=640, height=200, fg_color=ROW_BG, corner_radius=18)
         stage.pack(pady=(0, 26))
-        stage = ctk.CTkFrame(self.card, width=680, height=240, fg_color="#308AEA", corner_radius=0)
-        stage.pack(pady=(60, 25))
         stage.pack_propagate(False)
 
         try:
