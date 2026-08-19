@@ -50,8 +50,8 @@ STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top/bottom, 60px sides
 SHARK_CARD_H = 440
 
 RESULT_CARD_W = CARD_W
-RESULT_CARD_MAX = 900
-RESULT_CARD_MIN = 760
+RESULT_CARD_MAX = 880
+RESULT_CARD_MIN = 880
 
 
 class QuizPage(ctk.CTk):
@@ -351,19 +351,9 @@ class QuizPage(ctk.CTk):
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
             font=("Arial", 13, "bold"), command=self.finish_quiz
         )
-        continue_btn.pack(pady=(16, 0))
+        continue_btn.pack(pady=(16, 40))
 
-        # Measure the true content height and resize the window ONCE to
-        # fit it snugly, using the wider RESULT_CARD_W / taller
-        # RESULT_CARD_MAX so this screen actually has room — only a
-        # genuinely huge result (rare) will still need to scroll.
-        self.update_idletasks()
-        canvas = scroll._parent_canvas
-        bbox = canvas.bbox("all")
-        content_h = bbox[3] if bbox else 0
-        all_padding = 30 * 2 + 12 * 2 + 20 + 16
-        card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + all_padding + 10))
-        self._resize_stage(card_h, card_w=RESULT_CARD_W)
+        self._resize_stage(RESULT_CARD_MAX, card_w=RESULT_CARD_W)
 
         self.personality_result = {
             "raw_totals": raw_totals,
