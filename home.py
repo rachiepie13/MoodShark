@@ -273,8 +273,8 @@ class HomePage(ctk.CTk):
     # both loaded in a background thread.
     # ------------------------------------------------------------------
     def _build_trending_section(self):
-        self._trending_body = self._pixel_window(self.scroll, "WEEKLY TRENDS.EXE", border_color=GREEN, pady=(0, 30))
-        ctk.CTkLabel(self._trending_body, text="TRENDING THIS WEEK", font=("Arial", 20, "bold"), text_color=GREEN).pack(anchor="w")
+        self._trending_body = self._panel(self.scroll, "TRENDING THIS WEEK", accent=GREEN, pady=(0, 30))
+        ctk.CTkLabel(self._trending_body, text="TRENDING THIS WEEK", font=("Arial", 20, "bold"), text_color=TEXT_DARK).pack(anchor="w")
 
         # --- music sub-section ---
         ctk.CTkLabel(self._trending_body, text="BILLBOARD HOT 100", font=("Consolas", 12, "bold"), text_color=BLUE).pack(anchor="w", pady=(14, 0))
@@ -282,7 +282,7 @@ class HomePage(ctk.CTk):
         self._music_container.pack(fill="x", pady=(6, 0))
         self._music_loading = ctk.CTkLabel(
             self._music_container, text="Fetching this week's Billboard Hot 100...",
-            font=("Consolas", 11), text_color=GRAY
+            font=("Consolas", 11), text_color=MUTED
         )
         self._music_loading.pack(anchor="w")
 
@@ -292,7 +292,7 @@ class HomePage(ctk.CTk):
         self._podcast_container.pack(fill="x", pady=(6, 0))
         self._podcast_loading = ctk.CTkLabel(
             self._podcast_container, text="Fetching top podcasts from Apple Podcasts...",
-            font=("Consolas", 11), text_color=GRAY
+            font=("Consolas", 11), text_color=MUTED
         )
         self._podcast_loading.pack(anchor="w")
 
@@ -366,7 +366,7 @@ class HomePage(ctk.CTk):
             ).pack(anchor="w", padx=12, pady=(10, 0))
 
             ctk.CTkLabel(
-                card, text=title, font=("Arial", 13, "bold"), text_color=WHITE,
+                card, text=title, font=("Arial", 13, "bold"), text_color=TEXT_DARK,
                 wraplength=170, justify="left", anchor="w"
             ).pack(anchor="w", padx=12, pady=(4, 0))
 
@@ -544,12 +544,6 @@ class HomePage(ctk.CTk):
 
         step()
 
-    def _dim_siblings(self, card, dim):
-        for sibling in getattr(card._row, "_cards", []):
-            if sibling is card:
-                continue
-            sibling.configure(fg_color=DIM_BG if dim else ROW_BG)
-
     # ------------------------------------------------------------------
     # Podcast trending (polled from queue like music)
     # ------------------------------------------------------------------
@@ -570,7 +564,7 @@ class HomePage(ctk.CTk):
             self._podcast_loading.destroy()
 
         if not podcasts:
-            ctk.CTkLabel(self._podcast_container, text="No podcast data available.", font=("Consolas", 11), text_color=GRAY).pack(anchor="w")
+            ctk.CTkLabel(self._podcast_container, text="No podcast data available.", font=("Consolas", 11), text_color=MUTED).pack(anchor="w")
             return
 
         row = self._new_horizontal_row(self._podcast_container, height=180)
@@ -585,7 +579,7 @@ class HomePage(ctk.CTk):
             ).pack(anchor="w", padx=12, pady=(10, 0))
 
             ctk.CTkLabel(
-                card, text=name, font=("Arial", 13, "bold"), text_color=WHITE,
+                card, text=name, font=("Arial", 13, "bold"), text_color=TEXT_DARK,
                 wraplength=170, justify="left", anchor="w"
             ).pack(anchor="w", padx=12, pady=(4, 0))
 
