@@ -50,13 +50,13 @@ class RegisterPage(ctk.CTk):
         ctk.CTkLabel(card, text="Create an ID", font=("Arial", 26, "bold"), text_color=WHITE).pack(pady=(30, 5))
         ctk.CTkLabel(card, text="Join MoodShark and find your vibe.", font=("Arial", 13), text_color="#000000").pack(pady=(0, 20))
 
-        self.name_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Full Name", fg_color=LIGHT_BLUE, border_width=0)
+        self.name_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Full Name", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.name_entry.pack(pady=6)
 
-        self.username_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Username", fg_color=LIGHT_BLUE, border_width=0)
+        self.username_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Username", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.username_entry.pack(pady=6)
 
-        self.email_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Email", fg_color=LIGHT_BLUE, border_width=0)
+        self.email_entry = ctk.CTkEntry(card, width=300, height=38, placeholder_text="Email", fg_color=LIGHT_BLUE, border_width=0, text_color="#000000")
         self.email_entry.pack(pady=6)
 
         self.password_entry, self.password_eye_btn = self._build_password_field(card, "Password")
@@ -73,7 +73,7 @@ class RegisterPage(ctk.CTk):
 
         ctk.CTkButton(
             card, text="Already have an ID? Log in", fg_color="transparent",
-            hover=False, text_color=YELLOW, command=self.open_login
+            hover=False, text_color="#000000", command=self.open_login
         ).pack()
 
         self._animating = True
@@ -88,7 +88,7 @@ class RegisterPage(ctk.CTk):
 
         entry = ctk.CTkEntry(
             frame, width=250, height=30, placeholder_text=placeholder,
-            show="*", fg_color="transparent", border_width=0
+            show="*", fg_color="transparent", border_width=0, text_color="#000000"
         )
         entry.pack(side="left", padx=(12, 0), pady=4)
 

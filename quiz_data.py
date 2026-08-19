@@ -37,9 +37,9 @@ QUESTIONS = [
     {
         "question": "If you were a mythical creature for a day, which would you be?",
         "options": [
-            ("A", "A phoenix, rising from the ashes just to prove you could.", {"Challenger": 3, "Maverick": 1}),
+            ("A", "A phoenix, rising from the ashes.", {"Challenger": 3, "Maverick": 1}),
             ("B", "A dragon guarding a hoard of secrets you're still cataloging.", {"Strategist": 3, "Visionary": 1}),
-            ("C", "A unicorn wandering a forest no one else can find.", {"Daydreamer": 4}),
+            ("C", "A unicorn wandering a forest.", {"Daydreamer": 4}),
             ("D", "A griffin guarding its nest.", {"Nurturer": 3, "Cheerleader": 1}),
             ("E", "A kraken, mostly just enjoying being left alone.", {"Maverick": 3, "Realist": 1}),
         ]
@@ -190,8 +190,15 @@ PERSONALITY_DESCRIPTIONS = {
     },
 }
 
-# how close the top two traits need to be (percentage points) to show a "mix" result
-MIX_THRESHOLD = 10
+# How close the top two traits need to be (percentage points) to show a
+# "top two" result instead of a single trait.
+#
+# Tightened per feedback: a gap like 16 vs 17 (1pt) or 16 vs 16 (tied)
+# should still show both, but a gap like 15 vs 17 (2pts) should not —
+# that's enough of a lead that showing a "second personality" felt
+# arbitrary, especially when several other traits were clustered just
+# as close behind the real #2.
+MIX_THRESHOLD = 1.5
 
 
 def calculate_scores(answers):

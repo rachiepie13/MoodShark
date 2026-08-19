@@ -131,7 +131,7 @@ class LoginPage(ctk.CTk):
     def _show_loading_popup(self, on_complete, duration_ms=1900, label="Setting the stage for your vibes..."):
         popup = ctk.CTkToplevel(self)
         popup.withdraw()
-        popup.configure(fg_color=BG)
+        popup.configure(fg_color=BLUE)
 
         w, h = 300, 120
         self.update_idletasks()
@@ -159,7 +159,7 @@ class LoginPage(ctk.CTk):
         titlebar.place(x=0, y=0)
         ctk.CTkLabel(titlebar, text="SYNC.EXE", font=("Consolas", 11, "bold"), text_color="#111111").place(x=10, y=4)
 
-        ctk.CTkLabel(win, text=label, font=("Consolas", 11, "bold"), text_color=YELLOW).place(x=16, y=40)
+        ctk.CTkLabel(win, text=label, font=("Consolas", 11, "bold"), text_color=BLUE).place(x=16, y=40)
 
         bar_bg = ctk.CTkFrame(win, width=268, height=14, fg_color="#333333", corner_radius=0)
         bar_bg.place(x=16, y=64)
