@@ -302,13 +302,13 @@ class QuizPage(ctk.CTk):
 
         # ── layered nesting: blue outer → white inner ──
         outer_frame = ctk.CTkFrame(self.card, fg_color=BG, corner_radius=20)
-        outer_frame.pack(fill="both", expand=True, padx=30, pady=30)
+        outer_frame.pack(fill="both", expand=True, padx=20, pady=20)
 
         inner_panel = ctk.CTkFrame(outer_frame, fg_color=CARD, corner_radius=16)
         inner_panel.pack(fill="both", expand=True, padx=12, pady=12)
 
         scroll = ctk.CTkScrollableFrame(inner_panel, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=24, pady=(20, 16))
+        scroll.pack(fill="both", expand=True, padx=16, pady=(20, 16))
         content = scroll
 
         ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
@@ -318,12 +318,12 @@ class QuizPage(ctk.CTk):
             second_pct = summary["percentages"][second_trait]
             ctk.CTkLabel(
                 content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
+                text_color=TEXT_DARK, wraplength=660, width=660, justify="left"
             ).pack(anchor="w", pady=(2, 4))
             ctk.CTkLabel(
                 content,
                 text="These are the two personality types that best match your answers.",
-                font=("Arial", 13), text_color=MUTED, wraplength=780, width=780, justify="left"
+                font=("Arial", 13), text_color=MUTED, wraplength=660, width=660, justify="left"
             ).pack(anchor="w", pady=(0, 18))
 
             cards_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -334,7 +334,7 @@ class QuizPage(ctk.CTk):
         else:
             ctk.CTkLabel(
                 content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
+                text_color=TEXT_DARK, wraplength=660, width=660, justify="left"
             ).pack(anchor="w", pady=(2, 18))
 
             self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
@@ -395,7 +395,7 @@ class QuizPage(ctk.CTk):
         # These widths are bigger now to match the wider result card:
         # two side-by-side cards on a 940px stage get ~360px each of
         # usable text width instead of the old ~290px on a 760px stage.
-        desc_w = 360 if not full_width else 820
+        desc_w = 300 if not full_width else 650
         ctk.CTkLabel(
             inner, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
             wraplength=desc_w, width=desc_w, justify="left"
