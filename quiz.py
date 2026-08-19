@@ -51,7 +51,7 @@ SHARK_CARD_H = 440
 
 RESULT_CARD_W = CARD_W
 RESULT_CARD_MAX = 900
-RESULT_CARD_MIN = 700
+RESULT_CARD_MIN = 760
 
 
 class QuizPage(ctk.CTk):
@@ -300,8 +300,15 @@ class QuizPage(ctk.CTk):
         top_trait = summary["traits"][0]
         top_pct = summary["percentages"][top_trait]
 
-        scroll = ctk.CTkScrollableFrame(self.card, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=32, pady=(28, 22))
+        # ── layered nesting: blue outer → white inner ──
+        outer_frame = ctk.CTkFrame(self.card, fg_color=BG, corner_radius=20)
+        outer_frame.pack(fill="both", expand=True, padx=30, pady=30)
+
+        inner_panel = ctk.CTkFrame(outer_frame, fg_color=CARD, corner_radius=16)
+        inner_panel.pack(fill="both", expand=True, padx=12, pady=12)
+
+        scroll = ctk.CTkScrollableFrame(inner_panel, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=24, pady=(20, 16))
         content = scroll
 
         ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
@@ -311,12 +318,12 @@ class QuizPage(ctk.CTk):
             second_pct = summary["percentages"][second_trait]
             ctk.CTkLabel(
                 content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
+                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
             ).pack(anchor="w", pady=(2, 4))
             ctk.CTkLabel(
                 content,
                 text="These are the two personality types that best match your answers.",
-                font=("Arial", 13), text_color=MUTED, wraplength=850, width=850, justify="left"
+                font=("Arial", 13), text_color=MUTED, wraplength=780, width=780, justify="left"
             ).pack(anchor="w", pady=(0, 18))
 
             cards_row = ctk.CTkFrame(content, fg_color="transparent")
@@ -327,7 +334,7 @@ class QuizPage(ctk.CTk):
         else:
             ctk.CTkLabel(
                 content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
+                text_color=TEXT_DARK, wraplength=780, width=780, justify="left"
             ).pack(anchor="w", pady=(2, 18))
 
             self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
@@ -352,8 +359,9 @@ class QuizPage(ctk.CTk):
         # genuinely huge result (rare) will still need to scroll.
         self.update()
         content_h = continue_btn.winfo_y() + continue_btn.winfo_height()
-        scroll_padding = 28 + 22  # matches scroll.pack(pady=(28, 22)) above
-        card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + scroll_padding + 10))
+        # outer_frame (30*2) + inner_panel (12*2) + scroll (20+16) = 120
+        all_padding = 30 * 2 + 12 * 2 + 20 + 16
+        card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + all_padding + 10))
         self._resize_stage(card_h, card_w=RESULT_CARD_W)
 
         self.personality_result = {
