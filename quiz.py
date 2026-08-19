@@ -111,6 +111,29 @@ class QuizPage(ctk.CTk):
         return body
 
     # ------------------------------------------------------------------
+    # Bordered section with a colored titlebar and decorative dots,
+    # modernized from the old retro pixel-window style with rounded
+    # corners to match the current aesthetic.
+    # ------------------------------------------------------------------
+    def _pixel_window(self, parent, title, accent=BLUE, pady=(0, 16)):
+        frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14, border_width=2, border_color=accent)
+        frame.pack(fill="x", pady=pady)
+
+        titlebar = ctk.CTkFrame(frame, height=32, fg_color=accent, corner_radius=14)
+        titlebar.pack(side="top", fill="x")
+        titlebar.pack_propagate(False)
+        ctk.CTkLabel(titlebar, text=title, font=("Consolas", 11, "bold"), text_color="#111111").pack(side="left", padx=12)
+
+        dots = ctk.CTkFrame(titlebar, fg_color=accent)
+        dots.pack(side="right", padx=10)
+        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111", corner_radius=4).pack(side="left", padx=2)
+        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111", corner_radius=4).pack(side="left", padx=2)
+
+        body = ctk.CTkFrame(frame, fg_color=CARD, corner_radius=0)
+        body.pack(side="top", fill="both", expand=True, padx=18, pady=18)
+        return body
+
+    # ------------------------------------------------------------------
     # Shark fin circling screen.
     # ------------------------------------------------------------------
     def show_shark_screen(self, message, button_text, on_continue):
@@ -300,54 +323,66 @@ class QuizPage(ctk.CTk):
         top_trait = summary["traits"][0]
         top_pct = summary["percentages"][top_trait]
 
-        # ── layered nesting: blue outer → white inner ──
-        outer_frame = ctk.CTkFrame(self.card, fg_color=BG, corner_radius=20)
-        outer_frame.pack(fill="both", expand=True, padx=20, pady=20)
+        scroll = ctk.CTkScrollableFrame(self.card, fg_color="transparent")
+        scroll.pack(fill="both", expand=True, padx=20, pady=20)
 
-        inner_panel = ctk.CTkFrame(outer_frame, fg_color=CARD, corner_radius=16)
-        inner_panel.pack(fill="both", expand=True, padx=12, pady=12)
-
-        scroll = ctk.CTkScrollableFrame(inner_panel, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=16, pady=(20, 16))
-        content = scroll
-
-        ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
+        # ── headline section ──
+        headline_body = self._pixel_window(scroll, "RESULT.EXE", accent=YELLOW)
+        ctk.CTkLabel(headline_body, text="\U0001F988 SCAN COMPLETE", font=("Consolas", 10, "bold"), text_color=MUTED).pack(anchor="w")
 
         if summary["type"] == "mix":
             second_trait = summary["traits"][1]
             second_pct = summary["percentages"][second_trait]
             ctk.CTkLabel(
-                content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=660, width=660, justify="left"
-            ).pack(anchor="w", pady=(2, 4))
+                headline_body,
+                text=f"YOU'RE A MIX OF A {top_trait.upper()} & {second_trait.upper()}",
+                font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
+            ).pack(anchor="w", pady=(6, 0))
             ctk.CTkLabel(
-                content,
-                text="These are the two personality types that best match your answers.",
-                font=("Arial", 13), text_color=MUTED, wraplength=660, width=660, justify="left"
-            ).pack(anchor="w", pady=(0, 18))
+                headline_body,
+                text=f"{top_trait} {top_pct}%  •  {second_trait} {second_pct}%",
+                font=("Consolas", 12), text_color=BLUE
+            ).pack(anchor="w", pady=(6, 0))
+        else:
+            ctk.CTkLabel(
+                headline_body,
+                text=f"YOU ARE A {top_trait.upper()}",
+                font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
+            ).pack(anchor="w", pady=(6, 0))
 
-            cards_row = ctk.CTkFrame(content, fg_color="transparent")
-            cards_row.pack(fill="x", pady=(0, 16))
-
+        # ── match cards ──
+        if summary["type"] == "mix":
+            second_trait = summary["traits"][1]
+            second_pct = summary["percentages"][second_trait]
+            cards_row = ctk.CTkFrame(scroll, fg_color="transparent")
+            cards_row.pack(fill="x", pady=(0, 12))
             self._build_match_card(cards_row, "#1 BEST MATCH", top_trait, top_pct, accent=YELLOW, side="left", pad=(0, 10))
             self._build_match_card(cards_row, "#2 BEST MATCH", second_trait, second_pct, accent=BLUE, side="left", pad=(10, 0))
         else:
-            ctk.CTkLabel(
-                content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=660, width=660, justify="left"
-            ).pack(anchor="w", pady=(2, 18))
+            self._build_match_card(scroll, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
 
-            self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
+        # ── description section ──
+        desc = PERSONALITY_DESCRIPTIONS[top_trait]
+        desc_body = self._pixel_window(scroll, f"{top_trait.upper()}.EXE", accent=BLUE)
+        ctk.CTkLabel(
+            desc_body, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=620, justify="left"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            desc_body, text="You might like: " + desc["likes"], font=("Arial", 12, "italic"),
+            text_color=MUTED, wraplength=620, justify="left"
+        ).pack(anchor="w", pady=(10, 0))
 
-        breakdown = self._panel(content, " ", accent=MUTED, fg_color=ROW_BG, pady=(6, 6))
+        # ── breakdown section ──
+        breakdown_body = self._pixel_window(scroll, "BREAKDOWN.EXE", accent=YELLOW)
         for trait, pct in summary["ranked"]:
-            self._build_breakdown_row(breakdown, trait, pct)
+            self._build_breakdown_row(breakdown_body, trait, pct)
 
-        self.save_status = ctk.CTkLabel(content, text="", font=("Arial", 11), text_color=MUTED)
+        self.save_status = ctk.CTkLabel(scroll, text="", font=("Arial", 11), text_color=MUTED)
         self.save_status.pack(pady=(12, 0))
 
         continue_btn = ctk.CTkButton(
-            content, text="CONTINUE TO MOODSHARK", width=320, height=48, corner_radius=12,
+            scroll, text="CONTINUE TO MOODSHARK", width=320, height=48, corner_radius=12,
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
             font=("Arial", 13, "bold"), command=self.finish_quiz
         )
