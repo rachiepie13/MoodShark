@@ -11,6 +11,17 @@ recommendations.py — this file never talks to score_* functions directly.
 Exposes: HomePage(username)
 """
 
+import sys
+if sys.platform == "win32":
+    import ctypes
+    try:
+        ctypes.windll.shcore.SetProcessDpiAwareness(1)
+    except Exception:
+        try:
+            ctypes.windll.user32.SetProcessDPIAware()
+        except Exception:
+            pass
+
 import math
 import queue
 import re
