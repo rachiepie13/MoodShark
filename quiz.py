@@ -357,9 +357,10 @@ class QuizPage(ctk.CTk):
         # fit it snugly, using the wider RESULT_CARD_W / taller
         # RESULT_CARD_MAX so this screen actually has room — only a
         # genuinely huge result (rare) will still need to scroll.
-        self.update()
-        content_h = continue_btn.winfo_y() + continue_btn.winfo_height()
-        # outer_frame (30*2) + inner_panel (12*2) + scroll (20+16) = 120
+        self.update_idletasks()
+        canvas = scroll._parent_canvas
+        bbox = canvas.bbox("all")
+        content_h = bbox[3] if bbox else 0
         all_padding = 30 * 2 + 12 * 2 + 20 + 16
         card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + all_padding + 10))
         self._resize_stage(card_h, card_w=RESULT_CARD_W)
