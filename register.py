@@ -33,6 +33,7 @@ class RegisterPage(ctk.CTk):
         super().__init__()
         self.title("MoodShark - Register")
         self.geometry("1320x880")
+        self.after(50, lambda: self.geometry("1320x880"))
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
