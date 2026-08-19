@@ -38,20 +38,24 @@ MUTED = "#5A7096"
 RED = "#FF5C5C"
 GREEN = "#6BFF8F"
 
-# Every screen sizes itself to what it actually needs. Question/shark
-# screens use the compact width below; the result screen gets its own,
-# wider size (see RESULT_CARD_W / RESULT_CARD_MAX) since it has to fit
-# two match cards side by side plus a 10-row breakdown — the old shared
-# 760px width made that section feel cramped and forced it to scroll
-# more than it needed to.
 WINDOW_W = 880
 CARD_W = 760
 STAGE_MARGIN = WINDOW_W - CARD_W  # 120 total = 60px top/bottom, 60px sides
 SHARK_CARD_H = 440
 
+# Result screen keeps the same width as everything else (not widened) —
+# only its height flexes, and it's measured from the real content instead
+# of a fixed number, so a short single-match result doesn't leave dead
+# space and a long mix result doesn't get clipped.
 RESULT_CARD_W = CARD_W
-RESULT_CARD_MAX = 900
-RESULT_CARD_MIN = 700
+RESULT_CARD_MAX = 1000
+RESULT_CARD_MIN = 480
+
+# Reserved space at the top of the screen so the window never sits high
+# enough for its titlebar/content to be hidden behind a menu bar or
+# another app's window — this is what was causing the cut-off top.
+TOP_INSET = 60
+BOTTOM_INSET = 40
 
 
 class QuizPage(ctk.CTk):
@@ -59,7 +63,6 @@ class QuizPage(ctk.CTk):
         super().__init__()
         self.username = username
         self.title("MoodShark - Personality Quiz")
-        self.geometry(f"{WINDOW_W}x{SHARK_CARD_H + STAGE_MARGIN}")
         self.resizable(False, False)
         self.configure(fg_color=BG)
 
@@ -71,6 +74,8 @@ class QuizPage(ctk.CTk):
         self.card.place(relx=0.5, rely=0.5, anchor="center")
         self.card.pack_propagate(False)
 
+        self._resize_stage(SHARK_CARD_H)
+
         self.show_shark_screen(
             message="Something's circling. Might as well find out what it wants.",
             button_text="START QUIZ",
@@ -78,19 +83,25 @@ class QuizPage(ctk.CTk):
         )
 
     # ------------------------------------------------------------------
-    # Resizes both the window and the card together. card_w defaults to
-    # the standard compact width; the result screen passes RESULT_CARD_W
-    # to get its own wider stage.
+    # Resizes AND repositions the window together. Repositioning on every
+    # call (instead of only sizing) is what stops the window from ever
+    # sitting with its top edge above the visible screen area — it's
+    # always kept centered and at least TOP_INSET pixels down.
     # ------------------------------------------------------------------
-    def _resize_stage(self, card_h, card_w=CARD_W):
-        window_w = card_w + STAGE_MARGIN
+    def _resize_stage(self, card_h):
         window_h = card_h + STAGE_MARGIN
-        max_window_h = self.winfo_screenheight() - 100  # leave room for menu bar + dock
+        screen_w = self.winfo_screenwidth()
+        screen_h = self.winfo_screenheight()
+        top_margin = 60      # room for the menu bar + window title bar
+        bottom_margin = 90   # room for the dock
+        max_window_h = screen_h - top_margin - bottom_margin
         window_h = min(window_h, max_window_h)
         card_h = window_h - STAGE_MARGIN
-        self.geometry(f"{window_w}x{window_h}")
-        self.card.configure(width=card_w, height=card_h)
-
+        x = (screen_w - WINDOW_W) // 2
+        y = top_margin
+        self.geometry(f"{WINDOW_W}x{window_h}+{x}+{y}")
+        self.card.configure(height=card_h)
+        return card_h
     # ------------------------------------------------------------------
     # Small rounded panel helper, used anywhere we need a soft light-blue
     # block with an optional title above it (the breakdown section uses
@@ -108,6 +119,27 @@ class QuizPage(ctk.CTk):
                 body, text=title, font=("Arial", 11, "bold"),
                 text_color=accent
             ).pack(anchor="w", pady=(0, 6))
+        return body
+
+    # ------------------------------------------------------------------
+    # Bordered section with a colored titlebar and decorative dots.
+    # ------------------------------------------------------------------
+    def _pixel_window(self, parent, title, accent=BLUE, pady=(0, 16)):
+        frame = ctk.CTkFrame(parent, fg_color=CARD, corner_radius=14, border_width=2, border_color=accent)
+        frame.pack(fill="x", pady=pady)
+
+        titlebar = ctk.CTkFrame(frame, height=32, fg_color=accent, corner_radius=14)
+        titlebar.pack(side="top", fill="x")
+        titlebar.pack_propagate(False)
+        ctk.CTkLabel(titlebar, text=title, font=("Consolas", 11, "bold"), text_color="#111111").pack(side="left", padx=12)
+
+        dots = ctk.CTkFrame(titlebar, fg_color=accent)
+        dots.pack(side="right", padx=10)
+        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111", corner_radius=4).pack(side="left", padx=2)
+        ctk.CTkFrame(dots, width=8, height=8, fg_color="#111111", corner_radius=4).pack(side="left", padx=2)
+
+        body = ctk.CTkFrame(frame, fg_color=CARD, corner_radius=0)
+        body.pack(side="top", fill="both", expand=True, padx=18, pady=18)
         return body
 
     # ------------------------------------------------------------------
@@ -271,10 +303,9 @@ class QuizPage(ctk.CTk):
             )
 
     # ------------------------------------------------------------------
-    # Result screen — now gets its own wider stage (RESULT_CARD_W) and a
-    # taller cap (RESULT_CARD_MAX) than the question/shark screens, so
-    # the two match cards and full breakdown have real room to breathe
-    # instead of everything getting squeezed into the same 760px box.
+    # Result screen — pixel-window layout, no "SCAN COMPLETE" line, and
+    # sized from the real measured content (like the newer file did)
+    # instead of a fixed 880 every time.
     # ------------------------------------------------------------------
     def show_result(self):
         try:
@@ -301,58 +332,76 @@ class QuizPage(ctk.CTk):
         top_pct = summary["percentages"][top_trait]
 
         scroll = ctk.CTkScrollableFrame(self.card, fg_color="transparent")
-        scroll.pack(fill="both", expand=True, padx=32, pady=(28, 22))
-        content = scroll
+        scroll.pack(fill="both", expand=True, padx=20, pady=20)
 
-        ctk.CTkLabel(content, text="YOUR RESULT", font=("Arial", 11, "bold"), text_color=MUTED).pack(anchor="w")
+        # ── headline section (no "SCAN COMPLETE" line anymore) ──
+        headline_body = self._pixel_window(scroll, "RESULT.EXE", accent=YELLOW)
 
         if summary["type"] == "mix":
             second_trait = summary["traits"][1]
             second_pct = summary["percentages"][second_trait]
             ctk.CTkLabel(
-                content, text="Your Best Two Personality Picks", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
-            ).pack(anchor="w", pady=(2, 4))
+                headline_body,
+                text=f"YOU'RE A MIX OF A {top_trait.upper()} & {second_trait.upper()}",
+                font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
+            ).pack(anchor="w")
             ctk.CTkLabel(
-                content,
-                text="These are the two personality types that best match your answers.",
-                font=("Arial", 13), text_color=MUTED, wraplength=850, width=850, justify="left"
-            ).pack(anchor="w", pady=(0, 18))
+                headline_body,
+                text=f"{top_trait} {top_pct}%  •  {second_trait} {second_pct}%",
+                font=("Consolas", 12), text_color=BLUE
+            ).pack(anchor="w", pady=(6, 0))
+        else:
+            ctk.CTkLabel(
+                headline_body,
+                text=f"YOU ARE A {top_trait.upper()}",
+                font=("Arial", 22, "bold"), text_color=TEXT_DARK, wraplength=620, justify="left"
+            ).pack(anchor="w")
 
-            cards_row = ctk.CTkFrame(content, fg_color="transparent")
-            cards_row.pack(fill="x", pady=(0, 16))
-
+        # ── match cards ──
+        if summary["type"] == "mix":
+            second_trait = summary["traits"][1]
+            second_pct = summary["percentages"][second_trait]
+            cards_row = ctk.CTkFrame(scroll, fg_color="transparent")
+            cards_row.pack(fill="x", pady=(0, 12))
             self._build_match_card(cards_row, "#1 BEST MATCH", top_trait, top_pct, accent=YELLOW, side="left", pad=(0, 10))
             self._build_match_card(cards_row, "#2 BEST MATCH", second_trait, second_pct, accent=BLUE, side="left", pad=(10, 0))
         else:
-            ctk.CTkLabel(
-                content, text="Your Strongest Personality Match", font=("Arial", 26, "bold"),
-                text_color=TEXT_DARK, wraplength=850, width=850, justify="left"
-            ).pack(anchor="w", pady=(2, 18))
+            self._build_match_card(scroll, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
 
-            self._build_match_card(content, "YOUR MATCH", top_trait, top_pct, accent=YELLOW, side="top", full_width=True)
+        # ── description section ──
+        desc = PERSONALITY_DESCRIPTIONS[top_trait]
+        desc_body = self._pixel_window(scroll, f"{top_trait.upper()}.EXE", accent=BLUE)
+        ctk.CTkLabel(
+            desc_body, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
+            wraplength=620, justify="left"
+        ).pack(anchor="w")
+        ctk.CTkLabel(
+            desc_body, text="You might like: " + desc["likes"], font=("Arial", 12, "italic"),
+            text_color=MUTED, wraplength=620, justify="left"
+        ).pack(anchor="w", pady=(10, 0))
 
-        breakdown = self._panel(content, " ", accent=MUTED, fg_color=ROW_BG, pady=(6, 6))
+        # ── breakdown section ──
+        breakdown_body = self._pixel_window(scroll, "BREAKDOWN.EXE", accent=YELLOW)
         for trait, pct in summary["ranked"]:
-            self._build_breakdown_row(breakdown, trait, pct)
+            self._build_breakdown_row(breakdown_body, trait, pct)
 
-        self.save_status = ctk.CTkLabel(content, text="", font=("Arial", 11), text_color=MUTED)
+        self.save_status = ctk.CTkLabel(scroll, text="", font=("Arial", 11), text_color=MUTED)
         self.save_status.pack(pady=(12, 0))
 
         continue_btn = ctk.CTkButton(
-            content, text="CONTINUE TO MOODSHARK", width=320, height=48, corner_radius=12,
+            scroll, text="CONTINUE TO MOODSHARK", width=320, height=48, corner_radius=12,
             fg_color=YELLOW, hover_color="#D6EB00", text_color="black",
             font=("Arial", 13, "bold"), command=self.finish_quiz
         )
-        continue_btn.pack(pady=(16, 0))
+        continue_btn.pack(pady=(16, 20))
 
-        # Measure the true content height and resize the window ONCE to
-        # fit it snugly, using the wider RESULT_CARD_W / taller
-        # RESULT_CARD_MAX so this screen actually has room — only a
-        # genuinely huge result (rare) will still need to scroll.
+        # Measure the true content height (from the scroll frame's own
+        # coordinate space) and resize the window ONCE to fit it — this
+        # is the "new file" behavior: no more fixed 880 regardless of
+        # how much content there actually is.
         self.update()
         content_h = continue_btn.winfo_y() + continue_btn.winfo_height()
-        scroll_padding = 28 + 22  # matches scroll.pack(pady=(28, 22)) above
+        scroll_padding = 20 + 20  # matches scroll.pack(pady=20) above
         card_h = min(RESULT_CARD_MAX, max(RESULT_CARD_MIN, content_h + scroll_padding + 10))
         self._resize_stage(card_h, card_w=RESULT_CARD_W)
 
@@ -393,10 +442,7 @@ class QuizPage(ctk.CTk):
         # canvas sized from `width`, separate from where `wraplength`
         # wraps the text. Without width, the canvas can end up narrower
         # than the wrapped text needs, clipping it on the left.
-        # These widths are bigger now to match the wider result card:
-        # two side-by-side cards on a 940px stage get ~360px each of
-        # usable text width instead of the old ~290px on a 760px stage.
-        desc_w = 360 if not full_width else 820
+        desc_w = 300 if not full_width else 650
         ctk.CTkLabel(
             inner, text=desc["text"], font=("Arial", 13), text_color=TEXT_DARK,
             wraplength=desc_w, width=desc_w, justify="left"
